@@ -1,0 +1,24 @@
+{
+  "name": "@doki/auth",
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./src/index.ts"
+    },
+    "./*": {
+      "default": "./src/*.ts"
+    }
+  },
+  "scripts": {},
+  "dependencies": {
+    "@doki/db": "workspace:*",
+    "@doki/env": "workspace:*",
+    "better-auth": "catalog:",
+    "dotenv": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@doki/config": "workspace:*",
+    "typescript": "catalog:"
+  }
+}

@@ -1,0 +1,3 @@
+{
+  "extends": "@doki/config/tsconfig.base.json"
+}
