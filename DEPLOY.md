@@ -23,11 +23,22 @@ In Vercel, import the repository, then set:
 | Root Directory | `apps/web` |
 | Include files outside root | **enabled** (required — workspace packages live above it) |
 | Install Command | `bun install` |
-| Build Command | *(leave default)* |
+| Build Command | **leave empty / default** |
+| Output Directory | **leave empty / default** |
 
-The repo-level `vercel.json` covers the monorepo build if you deploy from the
-root instead; if you set Root Directory to `apps/web`, Vercel's own Turborepo
-detection handles it and you can ignore that file.
+Do not set a custom Build Command. With Root Directory pointed at `apps/web`,
+`bun run build` resolves to that package's own script (`next build`), so any
+root-style command such as `bun run build --filter=web` is passed through to
+Next as an unknown flag and the build fails with:
+
+```
+error: unknown option '--filter=web'
+```
+
+There is deliberately no `vercel.json` in this repo. Vercel detects Turborepo
+and Next.js on its own, and an extra config file only creates a second place
+for these settings to disagree. If a Build Command was already saved in the
+dashboard, clear it and redeploy.
 
 ## 3. Environment variables
 
@@ -66,9 +77,33 @@ COST_TTS_INR_PER_10K_CHARS, COST_LLM_INR_PER_1K_INPUT,
 COST_LLM_INR_PER_1K_OUTPUT, COST_PLATFORM_INR_PER_MIN
 ```
 
-Chicken-and-egg: you do not know the URL until the first deploy. Deploy once
-with placeholders, copy the assigned domain, update both URL variables, then
-redeploy. A custom domain avoids repeating this on every preview.
+### These are needed at BUILD time, not just at runtime
+
+`@doki/env/server` validates on import, and server components pull it in while
+Next collects page data. If `DATABASE_URL`, `BETTER_AUTH_SECRET` or
+`BETTER_AUTH_URL` are missing, the build fails with:
+
+```
+Invalid environment variables
+```
+
+So set them *before* the first deploy, not after it.
+
+### The URL chicken-and-egg
+
+You do not know the deployment URL until the first build, but two variables
+must equal it. Set them to a placeholder that still passes validation — both
+are only checked for being valid URLs:
+
+```
+BETTER_AUTH_URL=https://placeholder.vercel.app
+APP_URL=https://placeholder.vercel.app
+```
+
+Deploy, copy the assigned domain, update both, redeploy. Prefer this over
+`SKIP_ENV_VALIDATION=1`, which would also hide genuinely missing variables.
+
+A custom domain avoids repeating this on every preview deployment.
 
 ## 4. Push the schema
 
