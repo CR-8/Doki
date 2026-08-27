@@ -8,6 +8,7 @@ import {
 import { getVoiceProvider } from "@doki/connectors/voice/index";
 import { db } from "@doki/db";
 import { analyzeCall, ingestVoiceEvent } from "@doki/domain";
+import { waitUntil } from "@vercel/functions";
 
 /**
  * Kicks off post-call analysis without holding the webhook open.
@@ -26,7 +27,7 @@ function scheduleAnalysis(organizationId: string, callId: string): void {
 		return;
 	}
 
-	void analyzeCall(
+	const task = analyzeCall(
 		db,
 		llm,
 		{ callAnalysisSchema, buildAnalysisSystemPrompt, buildAnalysisUserPrompt },
@@ -43,6 +44,16 @@ function scheduleAnalysis(organizationId: string, callId: string): void {
 		.catch((error) => {
 			console.error("[webhook] analysis failed", { callId, error });
 		});
+
+	// On serverless the instance is frozen the moment the response is returned,
+	// which would kill this mid-flight. waitUntil keeps it alive past the
+	// response without making the provider wait for it. Outside that runtime
+	// the helper is unavailable, and a plain floating promise is correct.
+	try {
+		waitUntil(task);
+	} catch {
+		void task;
+	}
 }
 
 /**

@@ -11,6 +11,10 @@ export const env = createEnv({
 			.enum(["development", "production", "test"])
 			.default("development"),
 
+		/** Set by the platform. Used to pick serverless-safe connection pooling. */
+		VERCEL: z.string().optional(),
+		AWS_LAMBDA_FUNCTION_NAME: z.string().optional(),
+
 		/** Public origin used to build provider webhook callback URLs. */
 		APP_URL: z.url().default("http://localhost:3001"),
 

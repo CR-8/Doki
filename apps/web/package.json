@@ -6,7 +6,8 @@
 		"dev": "next dev --port 3001",
 		"build": "next build",
 		"check-types": "tsc --noEmit",
-		"start": "next start"
+		"start": "next start",
+		"preflight": "bun run scripts/preflight.ts"
 	},
 	"dependencies": {
 		"@base-ui/react": "^1.7.0",
@@ -27,6 +28,7 @@
 		"@swc/helpers": "^0.5.23",
 		"@tanstack/react-form": "^1.33.2",
 		"@tanstack/react-query": "^5.101.4",
+		"@vercel/functions": "^3.9.5",
 		"babel-plugin-react-compiler": "^1.0.0",
 		"better-auth": "catalog:",
 		"class-variance-authority": "^0.7.1",

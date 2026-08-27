@@ -20,18 +20,27 @@ declare global {
 	var __dokiSql: ReturnType<typeof postgres> | undefined;
 }
 
+/**
+ * Serverless platforms run many short-lived instances concurrently, and each
+ * one would otherwise open its own pool — exhausting the database's connection
+ * limit long before the app is under real load. One connection per instance,
+ * fanned out behind PgBouncer, is the correct shape there.
+ */
+const isServerless = Boolean(env.VERCEL || env.AWS_LAMBDA_FUNCTION_NAME);
+
 function createClient() {
 	return postgres(env.DATABASE_URL, {
 		prepare: false,
-		max: 10,
-		idle_timeout: 20,
+		max: isServerless ? 1 : 10,
+		idle_timeout: isServerless ? 10 : 20,
 		connect_timeout: 10,
 	});
 }
 
-// Reuse across hot reloads in development, otherwise every recompile leaks a pool.
+// Reuse across hot reloads in development, otherwise every recompile leaks a
+// pool. On serverless this also reuses the connection across warm invocations.
 const sql = globalThis.__dokiSql ?? createClient();
-if (env.NODE_ENV !== "production") globalThis.__dokiSql = sql;
+if (env.NODE_ENV !== "production" || isServerless) globalThis.__dokiSql = sql;
 
 export function createDb() {
 	return drizzle(sql, { schema });
