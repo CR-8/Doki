@@ -1,0 +1,30 @@
+{
+	"name": "@doki/domain",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"exports": {
+		".": {
+			"default": "./src/index.ts"
+		},
+		"./*": {
+			"default": "./src/*.ts"
+		}
+	},
+	"scripts": {
+		"check-types": "tsc --noEmit",
+		"verify": "bun run test/policy.check.ts"
+	},
+	"dependencies": {
+		"@doki/db": "workspace:*",
+		"@doki/env": "workspace:*",
+		"drizzle-orm": "^0.45.2",
+		"libphonenumber-js": "^1.11.19",
+		"zod": "catalog:"
+	},
+	"devDependencies": {
+		"@doki/config": "workspace:*",
+		"@types/node": "catalog:",
+		"typescript": "catalog:"
+	}
+}

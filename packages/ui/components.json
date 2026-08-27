@@ -1,24 +1,26 @@
 {
-  "$schema": "https://ui.shadcn.com/schema.json",
-  "style": "base-lyra",
-  "rsc": true,
-  "tsx": true,
-  "tailwind": {
-    "config": "",
-    "css": "src/styles/globals.css",
-    "baseColor": "neutral",
-    "cssVariables": true,
-    "prefix": ""
-  },
-  "iconLibrary": "lucide",
-  "aliases": {
-    "components": "@doki/ui/components",
-    "utils": "@doki/ui/lib/utils",
-    "hooks": "@doki/ui/hooks",
-    "lib": "@doki/ui/lib",
-    "ui": "@doki/ui/components"
-  },
-  "menuColor": "default",
-  "menuAccent": "subtle",
-  "registries": {}
+	"$schema": "https://ui.shadcn.com/schema.json",
+	"style": "base-lyra",
+	"rsc": true,
+	"tsx": true,
+	"tailwind": {
+		"config": "",
+		"css": "src/styles/globals.css",
+		"baseColor": "neutral",
+		"cssVariables": true,
+		"prefix": ""
+	},
+	"iconLibrary": "phosphor",
+	"aliases": {
+		"components": "@doki/ui/components",
+		"utils": "@doki/ui/lib/utils",
+		"hooks": "@doki/ui/hooks",
+		"lib": "@doki/ui/lib",
+		"ui": "@doki/ui/components"
+	},
+	"menuColor": "default",
+	"menuAccent": "subtle",
+	"registries": {
+		"@elevenlabs": "https://raw.githubusercontent.com/elevenlabs/ui/main/apps/www/public/r/{name}.json"
+	}
 }

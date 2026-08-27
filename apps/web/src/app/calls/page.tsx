@@ -1,0 +1,25 @@
+import { auth } from "@doki/auth";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+
+import { CallsTable } from "@/components/calls/calls-table";
+import { CreateWorkspace } from "@/components/create-workspace";
+
+export default async function CallsPage() {
+	const session = await auth.api.getSession({ headers: await headers() });
+
+	if (!session?.user) redirect("/login");
+	if (!session.session.activeOrganizationId) return <CreateWorkspace />;
+
+	return (
+		<div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-8">
+			<div className="flex flex-col gap-1">
+				<h1 className="font-semibold text-2xl tracking-tight">Calls</h1>
+				<p className="text-muted-foreground text-sm">
+					Every call, what it cost, and what came of it.
+				</p>
+			</div>
+			<CallsTable />
+		</div>
+	);
+}

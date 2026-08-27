@@ -1,0 +1,29 @@
+{
+	"name": "@doki/connectors",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"exports": {
+		".": {
+			"default": "./src/index.ts"
+		},
+		"./*": {
+			"default": "./src/*.ts"
+		}
+	},
+	"scripts": {
+		"check-types": "tsc --noEmit",
+		"verify": "bun run test/llm.check.ts && bun run test/twilio.check.ts",
+		"verify:sarvam": "bun run test/sarvam-live.check.ts"
+	},
+	"dependencies": {
+		"@doki/env": "workspace:*",
+		"zod": "catalog:"
+	},
+	"devDependencies": {
+		"@doki/config": "workspace:*",
+		"@types/node": "catalog:",
+		"twilio": "^6.1.0",
+		"typescript": "catalog:"
+	}
+}
