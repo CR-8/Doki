@@ -77,6 +77,23 @@ COST_TTS_INR_PER_10K_CHARS, COST_LLM_INR_PER_1K_INPUT,
 COST_LLM_INR_PER_1K_OUTPUT, COST_PLATFORM_INR_PER_MIN
 ```
 
+### Turborepo must be told which variables exist
+
+**This is the one that bites first.** Turborepo passes through *only* the env
+vars declared in `turbo.json`. Anything omitted is invisible to the build even
+when it is correctly set on Vercel, and the build fails with:
+
+```
+Invalid environment variables: [ { path: [ 'DATABASE_URL' ], ... } ]
+```
+
+alongside a warning listing the variables that were "set on your Vercel
+project, but missing from turbo.json".
+
+Every variable below is already declared in `turbo.json` under
+`tasks.build.env`. **If you add a new one, you must add it there too** or it
+will silently not reach the build.
+
 ### These are needed at BUILD time, not just at runtime
 
 `@doki/env/server` validates on import, and server components pull it in while
