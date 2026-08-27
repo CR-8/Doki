@@ -1,14 +1,16 @@
+import { getVoiceProvider } from "@doki/connectors/voice/index";
 import {
 	agent as agentTable,
 	followUpAction,
 	lead as leadTable,
 } from "@doki/db/schema";
-import { cancelFollowUp, scheduleFollowUp } from "@doki/domain";
+import { cancelFollowUp, drainFollowUps, scheduleFollowUp } from "@doki/domain";
 import { ORPCError } from "@orpc/server";
 import { and, asc, count, eq, lte } from "drizzle-orm";
 import { z } from "zod";
 
 import { tenantProcedure } from "../index";
+import { audioPublisher } from "../lib/audio-publisher";
 
 export const followUpsRouter = {
 	list: tenantProcedure
@@ -86,6 +88,47 @@ export const followUpsRouter = {
 				actions: rows,
 				pending: pending?.value ?? 0,
 				dueNow: dueNow?.value ?? 0,
+			};
+		}),
+
+	/**
+	 * Drains due follow-ups.
+	 *
+	 * This deployment has no background worker, so draining is driven by
+	 * console traffic instead. Safe to call from any open tab: a system-wide
+	 * interval guard means many callers produce one drain, and the underlying
+	 * claim query prevents double-dialling regardless.
+	 */
+	drain: tenantProcedure
+		.input(z.object({ force: z.boolean().default(false) }))
+		.handler(async ({ context, input }) => {
+			const { db } = context;
+
+			let voice: ReturnType<typeof getVoiceProvider>;
+			try {
+				voice = getVoiceProvider({ audio: audioPublisher });
+			} catch {
+				// Nothing to drain into — report quietly rather than erroring in
+				// the background heartbeat.
+				return { ran: false as const, reason: "NO_PROVIDER" as const };
+			}
+
+			const outcome = await drainFollowUps(db, voice, {
+				triggeredBy: "console",
+				force: input.force,
+			});
+
+			if (!outcome.ran) {
+				return { ran: false as const, reason: outcome.reason };
+			}
+
+			return {
+				ran: true as const,
+				claimed: outcome.result.claimed,
+				succeeded: outcome.result.succeeded,
+				skipped: outcome.result.skipped,
+				failed: outcome.result.failed,
+				reclaimed: outcome.reclaimed,
 			};
 		}),
 

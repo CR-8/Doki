@@ -65,9 +65,9 @@ function Attribution({ person }: { person: Person }) {
 	);
 }
 
-export default function Testimonials({ className }: { className?: string }) {
+export default function Testimonials() {
 	return (
-		<section className={cn("testimonials", className)} id="testimonials">
+		<section className="testimonials" id="testimonials">
 			<div className="mx-auto max-w-6xl space-y-8 px-6 py-20 md:space-y-16 md:py-28">
 				<div className="relative z-10 mx-auto max-w-xl space-y-4 text-center md:space-y-6">
 					<h2 className="font-medium text-4xl text-white leading-[1.12] tracking-[-0.045em] lg:text-5xl">

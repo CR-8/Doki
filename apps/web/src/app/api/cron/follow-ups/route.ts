@@ -3,7 +3,7 @@ import { timingSafeEqual } from "node:crypto";
 import { audioPublisher } from "@doki/api/lib/audio-publisher";
 import { getVoiceProvider } from "@doki/connectors/voice/index";
 import { db } from "@doki/db";
-import { reclaimStalled, runDueFollowUps } from "@doki/domain";
+import { drainFollowUps } from "@doki/domain";
 import { env } from "@doki/env/server";
 
 export const runtime = "nodejs";
@@ -52,13 +52,23 @@ export async function GET(request: Request): Promise<Response> {
 		);
 	}
 
-	// Return rows stranded by a runner that died mid-execution.
-	const reclaimed = await reclaimStalled(db).catch(() => 0);
+	// External schedulers are explicit about wanting a run, so they bypass the
+	// interval guard the console heartbeat relies on.
+	const outcome = await drainFollowUps(db, voice, {
+		triggeredBy: "cron",
+		force: true,
+		limit: 25,
+	});
 
-	const runnerId = `cron-${Date.now().toString(36)}`;
-	const result = await runDueFollowUps(db, voice, { runnerId, limit: 10 });
+	if (!outcome.ran)
+		return Response.json({ ok: true, ran: false, reason: outcome.reason });
 
-	return Response.json({ ok: true, ...result, reclaimed });
+	return Response.json({
+		ok: true,
+		ran: true,
+		...outcome.result,
+		reclaimed: outcome.reclaimed,
+	});
 }
 
 /** Same behaviour for schedulers that trigger with POST. */

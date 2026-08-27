@@ -3,7 +3,7 @@ import {
 	type FollowUpAction,
 	followUpAction,
 } from "@doki/db/schema";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, lt } from "drizzle-orm";
 
 import { type AuditActor, recordAudit } from "../audit";
 
@@ -166,7 +166,7 @@ export async function reclaimStalled(
 		.where(
 			and(
 				eq(followUpAction.status, "RUNNING"),
-				sql`${followUpAction.lockedAt} < ${cutoff}`,
+				lt(followUpAction.lockedAt, cutoff),
 			),
 		)
 		.returning({ id: followUpAction.id });

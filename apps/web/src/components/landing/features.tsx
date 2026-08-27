@@ -19,9 +19,9 @@ const TEAM = [
 	},
 ];
 
-export default function Features({ className }: { className?: string }) {
+export default function Features() {
 	return (
-		<section className={cn("features", className)} id="features">
+		<section className="features" id="features">
 			<div className="mx-auto max-w-3xl px-6 py-20 md:py-28 lg:max-w-5xl">
 				<div className="mb-10 max-w-xl md:mb-14">
 					<span className="text-[#9a9a9a] text-[12.5px] tracking-[-0.01em]">

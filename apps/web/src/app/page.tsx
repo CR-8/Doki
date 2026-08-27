@@ -2,7 +2,10 @@ import type { Metadata } from "next";
 import { Instrument_Serif, Inter } from "next/font/google";
 import Link from "next/link";
 
+import CtaFaq from "@/components/landing/cta-faq";
 import Features from "@/components/landing/features";
+import HowItWorks from "@/components/landing/how-it-works";
+import SiteFooter from "@/components/landing/site-footer";
 import Testimonials from "@/components/landing/testimonials";
 import VesperMotion from "@/components/landing/vesper-motion";
 
@@ -139,14 +142,89 @@ html, body {
 
 /* The self-hosted faces land on .page, so the tokens are re-declared here —
    a var() in :root cannot reach a custom property defined further down. */
-.features,
-.testimonials {
+/* Everything under the hero rides on one opaque surface, so it scrolls up over
+   the fixed hero media instead of letting it show through. */
+.below-fold {
   --font-ui: var(--vesper-sans), "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-display: var(--vesper-serif), "Instrument Serif", "Times New Roman", Times, serif;
   font-family: var(--font-ui);
   position: relative;
   z-index: 2;
   background: #000000;
 }
+
+/* ---------------- animated gradient CTA ---------------- */
+
+@property --c5-x1 { syntax: '<percentage>'; inherits: false; initial-value: 10%; }
+@property --c5-y1 { syntax: '<percentage>'; inherits: false; initial-value: 10%; }
+@property --c5-x2 { syntax: '<percentage>'; inherits: false; initial-value: 90%; }
+@property --c5-y2 { syntax: '<percentage>'; inherits: false; initial-value: 10%; }
+@property --c5-x3 { syntax: '<percentage>'; inherits: false; initial-value: 10%; }
+@property --c5-y3 { syntax: '<percentage>'; inherits: false; initial-value: 90%; }
+@property --c5-x4 { syntax: '<percentage>'; inherits: false; initial-value: 90%; }
+@property --c5-y4 { syntax: '<percentage>'; inherits: false; initial-value: 90%; }
+@property --c5-x5 { syntax: '<percentage>'; inherits: false; initial-value: 50%; }
+@property --c5-y5 { syntax: '<percentage>'; inherits: false; initial-value: 50%; }
+@property --c5-s1 { syntax: '<percentage>'; inherits: false; initial-value: 55%; }
+@property --c5-s2 { syntax: '<percentage>'; inherits: false; initial-value: 55%; }
+@property --c5-s3 { syntax: '<percentage>'; inherits: false; initial-value: 55%; }
+@property --c5-s4 { syntax: '<percentage>'; inherits: false; initial-value: 55%; }
+@property --c5-s5 { syntax: '<percentage>'; inherits: false; initial-value: 65%; }
+
+.c5-animated-gradient {
+  background-color: #ff8e53;
+  background-image:
+    radial-gradient(circle at var(--c5-x1) var(--c5-y1), #fff1aa 0px, transparent var(--c5-s1)),
+    radial-gradient(circle at var(--c5-x2) var(--c5-y2), #ff4b2b 0px, transparent var(--c5-s2)),
+    radial-gradient(circle at var(--c5-x3) var(--c5-y3), #8aff8a 0px, transparent var(--c5-s3)),
+    radial-gradient(circle at var(--c5-x4) var(--c5-y4), #ffd000 0px, transparent var(--c5-s4)),
+    radial-gradient(circle at var(--c5-x5) var(--c5-y5), #ff1493 0px, transparent var(--c5-s5));
+  animation:
+    c5-blob1 5s ease-in-out infinite,
+    c5-blob2 6s ease-in-out infinite,
+    c5-blob3 5.5s ease-in-out infinite,
+    c5-blob4 6.5s ease-in-out infinite,
+    c5-blob5 4s ease-in-out infinite,
+    c5-size1 3.5s ease-in-out infinite,
+    c5-size2 4.2s ease-in-out infinite,
+    c5-size3 3.8s ease-in-out infinite,
+    c5-size4 4.6s ease-in-out infinite,
+    c5-size5 3s ease-in-out infinite;
+}
+
+@keyframes c5-blob1 {
+  0%,100% { --c5-x1: 5%;  --c5-y1: 5%;  }
+  25%     { --c5-x1: 45%; --c5-y1: 20%; }
+  50%     { --c5-x1: 30%; --c5-y1: 55%; }
+  75%     { --c5-x1: 0%;  --c5-y1: 30%; }
+}
+@keyframes c5-blob2 {
+  0%,100% { --c5-x2: 95%; --c5-y2: 5%;  }
+  33%     { --c5-x2: 55%; --c5-y2: 35%; }
+  66%     { --c5-x2: 80%; --c5-y2: 65%; }
+}
+@keyframes c5-blob3 {
+  0%,100% { --c5-x3: 5%;  --c5-y3: 95%; }
+  40%     { --c5-x3: 45%; --c5-y3: 65%; }
+  70%     { --c5-x3: 25%; --c5-y3: 100%; }
+}
+@keyframes c5-blob4 {
+  0%,100% { --c5-x4: 95%; --c5-y4: 95%; }
+  30%     { --c5-x4: 60%; --c5-y4: 70%; }
+  60%     { --c5-x4: 100%; --c5-y4: 50%; }
+}
+@keyframes c5-blob5 {
+  0%,100% { --c5-x5: 50%; --c5-y5: 50%; }
+  25%     { --c5-x5: 70%; --c5-y5: 30%; }
+  50%     { --c5-x5: 40%; --c5-y5: 70%; }
+  75%     { --c5-x5: 30%; --c5-y5: 40%; }
+}
+
+@keyframes c5-size1 { 0%,100% { --c5-s1: 45%; } 50% { --c5-s1: 80%; } }
+@keyframes c5-size2 { 0%,100% { --c5-s2: 45%; } 50% { --c5-s2: 85%; } }
+@keyframes c5-size3 { 0%,100% { --c5-s3: 45%; } 50% { --c5-s3: 78%; } }
+@keyframes c5-size4 { 0%,100% { --c5-s4: 45%; } 50% { --c5-s4: 82%; } }
+@keyframes c5-size5 { 0%,100% { --c5-s5: 50%; } 50% { --c5-s5: 85%; } }
 
 .page {
   --font-ui: var(--vesper-sans), "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -728,22 +806,29 @@ export default function Home() {
 					<nav aria-label="Primary" className="nav" id="site-nav">
 						<a
 							className="appear appear--scale"
-							href="#features"
+							href="#how-it-works"
 							style={{ "--d": "0.16s" } as React.CSSProperties}
+						>
+							How It Works
+						</a>
+						<a
+							className="appear appear--soft"
+							href="#features"
+							style={{ "--d": "0.28s" } as React.CSSProperties}
 						>
 							Features
 						</a>
 						<a
-							className="appear appear--soft"
+							className="appear appear--scale"
 							href="#testimonials"
-							style={{ "--d": "0.28s" } as React.CSSProperties}
+							style={{ "--d": "0.40s" } as React.CSSProperties}
 						>
 							Customers
 						</a>
 						<Link
-							className="appear appear--scale"
+							className="appear appear--soft"
 							href="/login"
-							style={{ "--d": "0.40s" } as React.CSSProperties}
+							style={{ "--d": "0.52s" } as React.CSSProperties}
 						>
 							Sign in
 						</Link>
@@ -979,11 +1064,15 @@ export default function Home() {
 				</footer>
 			</div>
 
-			<Features className={`${inter.variable} ${instrumentSerif.variable}`} />
-
-			<Testimonials
-				className={`${inter.variable} ${instrumentSerif.variable}`}
-			/>
+			<div
+				className={`below-fold ${inter.variable} ${instrumentSerif.variable}`}
+			>
+				<HowItWorks />
+				<Features />
+				<Testimonials />
+				<CtaFaq />
+				<SiteFooter />
+			</div>
 
 			<VesperMotion />
 		</>

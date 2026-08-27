@@ -1,14 +1,21 @@
+"use client";
+
 import { Button } from "@doki/ui/components/button";
+import { Field, FieldError, FieldLabel } from "@doki/ui/components/field";
 import { Input } from "@doki/ui/components/input";
-import { Label } from "@doki/ui/components/label";
 import { useForm } from "@tanstack/react-form";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import z from "zod";
 
+import PasswordInput, { INPUT_CLASS } from "@/components/auth/password-input";
+import SocialProviders from "@/components/auth/social-providers";
 import { authClient } from "@/lib/auth-client";
 
 import Loader from "./loader";
+
+/** Mirrors `emailAndPassword.minPasswordLength` in packages/auth. */
+const MIN_PASSWORD = 10;
 
 export default function SignInForm({
 	onSwitchToSignUp,
@@ -43,7 +50,12 @@ export default function SignInForm({
 		validators: {
 			onSubmit: z.object({
 				email: z.email("Invalid email address"),
-				password: z.string().min(8, "Password must be at least 8 characters"),
+				password: z
+					.string()
+					.min(
+						MIN_PASSWORD,
+						`Password must be at least ${MIN_PASSWORD} characters`,
+					),
 			}),
 		},
 	});
@@ -53,62 +65,69 @@ export default function SignInForm({
 	}
 
 	return (
-		<div className="mx-auto mt-10 w-full max-w-md p-6">
-			<h1 className="mb-6 text-center font-bold text-3xl">Welcome Back</h1>
+		<div className="flex flex-col gap-5">
+			<div className="mb-2 text-center">
+				<h2 className="font-semibold text-2xl text-white">Welcome Back</h2>
+				<p className="mt-1 text-sm text-white/50">
+					Enter your credentials to access your account.
+				</p>
+			</div>
+
+			<SocialProviders />
 
 			<form
-				onSubmit={(e) => {
-					e.preventDefault();
-					e.stopPropagation();
+				className="flex flex-col gap-5"
+				onSubmit={(event) => {
+					event.preventDefault();
+					event.stopPropagation();
 					form.handleSubmit();
 				}}
-				className="space-y-4"
 			>
-				<div>
-					<form.Field name="email">
-						{(field) => (
-							<div className="space-y-2">
-								<Label htmlFor={field.name}>Email</Label>
-								<Input
-									id={field.name}
-									name={field.name}
-									type="email"
-									value={field.state.value}
-									onBlur={field.handleBlur}
-									onChange={(e) => field.handleChange(e.target.value)}
-								/>
-								{field.state.meta.errors.map((error) => (
-									<p key={error?.message} className="text-red-500">
-										{error?.message}
-									</p>
-								))}
-							</div>
-						)}
-					</form.Field>
-				</div>
+				<form.Field name="email">
+					{(field) => (
+						<Field>
+							<FieldLabel
+								className="text-white/70 text-xs"
+								htmlFor={field.name}
+							>
+								Email
+							</FieldLabel>
+							<Input
+								className={INPUT_CLASS}
+								id={field.name}
+								name={field.name}
+								onBlur={field.handleBlur}
+								onChange={(event) => field.handleChange(event.target.value)}
+								placeholder="eg. johnfrans@gmail.com"
+								type="email"
+								value={field.state.value}
+							/>
+							<FieldError errors={field.state.meta.errors} />
+						</Field>
+					)}
+				</form.Field>
 
-				<div>
-					<form.Field name="password">
-						{(field) => (
-							<div className="space-y-2">
-								<Label htmlFor={field.name}>Password</Label>
-								<Input
-									id={field.name}
-									name={field.name}
-									type="password"
-									value={field.state.value}
-									onBlur={field.handleBlur}
-									onChange={(e) => field.handleChange(e.target.value)}
-								/>
-								{field.state.meta.errors.map((error) => (
-									<p key={error?.message} className="text-red-500">
-										{error?.message}
-									</p>
-								))}
-							</div>
-						)}
-					</form.Field>
-				</div>
+				<form.Field name="password">
+					{(field) => (
+						<Field>
+							<FieldLabel
+								className="text-white/70 text-xs"
+								htmlFor={field.name}
+							>
+								Password
+							</FieldLabel>
+							<PasswordInput
+								id={field.name}
+								name={field.name}
+								onBlur={field.handleBlur}
+								onChange={field.handleChange}
+								placeholder="Enter your password"
+								value={field.state.value}
+							/>
+							<FieldError errors={field.state.meta.errors} />
+						</Field>
+					)}
+				</form.Field>
 
 				<form.Subscribe
 					selector={(state) => ({
@@ -118,9 +137,9 @@ export default function SignInForm({
 				>
 					{({ canSubmit, isSubmitting }) => (
 						<Button
-							type="submit"
-							className="w-full"
+							className="h-auto w-full rounded-lg bg-white py-2.5 font-semibold text-black text-sm hover:bg-white/90"
 							disabled={!canSubmit || isSubmitting}
+							type="submit"
 						>
 							{isSubmitting ? "Submitting..." : "Sign In"}
 						</Button>
@@ -128,15 +147,16 @@ export default function SignInForm({
 				</form.Subscribe>
 			</form>
 
-			<div className="mt-4 text-center">
-				<Button
-					variant="link"
+			<p className="text-center text-sm text-white/40">
+				Don&apos;t have an account?{" "}
+				<button
+					className="font-semibold text-white hover:underline"
 					onClick={onSwitchToSignUp}
-					className="text-indigo-600 hover:text-indigo-800"
+					type="button"
 				>
-					Need an account? Sign Up
-				</Button>
-			</div>
+					Sign up
+				</button>
+			</p>
 		</div>
 	);
 }
