@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import { Instrument_Serif, Inter } from "next/font/google";
+import Link from "next/link";
 
+import Features from "@/components/landing/features";
+import Testimonials from "@/components/landing/testimonials";
 import VesperMotion from "@/components/landing/vesper-motion";
 
 const inter = Inter({
@@ -24,16 +27,21 @@ const HERO_MEDIA =
 	"https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260818_072341_50851634-bbc3-4c33-9acc-7647d4db44aa.mp4";
 
 export const metadata: Metadata = {
-	title: "Vesper.ai — Operational AI Infrastructure",
+	title: "doki — AI Calling Infrastructure",
 	description:
-		"Deploy adaptive AI agents that learn, execute, and scale operational tasks across your business.",
+		"Deploy voice agents that dial, qualify, and follow up on every lead — inside your calling windows, consent rules, and DNC list.",
 	icons: { icon: FAVICON },
 };
 
 const CSS = `
 html, body { background: #000000 !important; color: #ffffff; }
 
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+/* The element-level reset lives in Tailwind's base layer: unlayered rules beat
+   every layered utility, so an unlayered universal reset here would silently
+   kill the spacing utilities the features section is built from. */
+@layer base {
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+}
 
 :root {
   --bg: #000000;
@@ -75,18 +83,20 @@ html, body {
   color: var(--text, #ffffff);
 }
 
-body {
-  font-family: var(--font-ui);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  text-rendering: optimizeLegibility;
-  overflow-x: hidden;
-  position: relative;
-}
+@layer base {
+  body {
+    font-family: var(--font-ui);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    overflow-x: hidden;
+    position: relative;
+  }
 
-a { color: inherit; text-decoration: none; }
-button { font-family: inherit; }
-svg { display: block; }
+  a { color: inherit; text-decoration: none; }
+  button { font-family: inherit; }
+  svg { display: block; }
+}
 
 /* ---------------- layers ---------------- */
 
@@ -129,6 +139,15 @@ svg { display: block; }
 
 /* The self-hosted faces land on .page, so the tokens are re-declared here —
    a var() in :root cannot reach a custom property defined further down. */
+.features,
+.testimonials {
+  --font-ui: var(--vesper-sans), "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--font-ui);
+  position: relative;
+  z-index: 2;
+  background: #000000;
+}
+
 .page {
   --font-ui: var(--vesper-sans), "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-display: var(--vesper-serif), "Instrument Serif", "Times New Roman", Times, serif;
@@ -581,13 +600,14 @@ body.menu-open { overflow: hidden; }
   .badge { margin-bottom: 8px; }
 }
 
+/* The hero still occupies exactly one frame on desktop, but the page scrolls
+   now that the features section sits below it. */
 @media (min-width: 901px) {
-  html, body { height: 100%; overflow: hidden; }
-  .page { height: 100vh; height: 100dvh; overflow: hidden; }
+  .page { height: 100vh; height: 100dvh; }
 }
 
 @media (max-width: 900px) {
-  html, body { height: auto; overflow-y: auto; }
+  html, body { height: auto; }
   :root {
     --logo: 16px; --btn: 15px; --btn-h: 46px; --hero-btn-h: 48px;
     --h1: 36px; --lede: 16.5px; --badge: 13.5px; --stat-size: 15px;
@@ -655,8 +675,7 @@ export default function Home() {
 			<style dangerouslySetInnerHTML={{ __html: CSS }} />
 
 			<div aria-hidden="true" className="grain">
-				<svg xmlns="http://www.w3.org/2000/svg">
-					<title>Grain</title>
+				<svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
 					<filter id="vesper-grain">
 						<feTurbulence
 							baseFrequency="0.85"
@@ -688,13 +707,12 @@ export default function Home() {
 
 				<header className="header">
 					<a
-						aria-label="Vesper.ai"
+						aria-label="doki.ai"
 						className="logo appear appear--scale"
 						href="#top"
 						style={{ "--d": "0.08s" } as React.CSSProperties}
 					>
-						<svg fill="currentColor" viewBox="0 0 24 24">
-							<title>Vesper.ai</title>
+						<svg aria-hidden="true" fill="currentColor" viewBox="0 0 24 24">
 							<g transform="rotate(-30 12 12)">
 								<circle cx="7.3" cy="3.2" r="1.45" />
 								<rect height="14.6" rx="1.8" width="3.6" x="5.5" y="4.7" />
@@ -703,48 +721,41 @@ export default function Home() {
 							</g>
 						</svg>
 						<span>
-							Vesper<span className="logo-suffix">.ai</span>
+							doki<span className="logo-suffix">.ai</span>
 						</span>
 					</a>
 
 					<nav aria-label="Primary" className="nav" id="site-nav">
 						<a
 							className="appear appear--scale"
-							href="#benefits"
+							href="#features"
 							style={{ "--d": "0.16s" } as React.CSSProperties}
 						>
-							Benefits
+							Features
 						</a>
 						<a
 							className="appear appear--soft"
-							href="#how-it-works"
+							href="#testimonials"
 							style={{ "--d": "0.28s" } as React.CSSProperties}
 						>
-							How It Works
+							Customers
 						</a>
-						<a
+						<Link
 							className="appear appear--scale"
-							href="#faqs"
+							href="/login"
 							style={{ "--d": "0.40s" } as React.CSSProperties}
 						>
-							FAQs
-						</a>
-						<a
-							className="appear appear--soft"
-							href="#pricing"
-							style={{ "--d": "0.52s" } as React.CSSProperties}
-						>
-							Pricing
-						</a>
+							Sign in
+						</Link>
 					</nav>
 
-					<a
+					<Link
 						className="btn btn-solid header-cta appear appear--scale"
-						href="#start"
+						href="/login"
 						style={{ "--d": "0.34s" } as React.CSSProperties}
 					>
 						Start for Free
-					</a>
+					</Link>
 
 					<button
 						aria-controls="site-nav"
@@ -767,15 +778,15 @@ export default function Home() {
 							style={{ "--d": "0.22s" } as React.CSSProperties}
 						>
 							<svg
+								aria-hidden="true"
 								className="badge-star"
 								fill="#ffffff"
 								viewBox="0 0 24 24"
 								xmlns="http://www.w3.org/2000/svg"
 							>
-								<title>Sparkle</title>
 								<path d="M12 2.6C12.55 2.6 12.88 3.15 13.08 4.7c.62 4.7 1.52 5.6 6.22 6.22 1.55.2 2.1.53 2.1 1.08s-.55.88-2.1 1.08c-4.7.62-5.6 1.52-6.22 6.22-.2 1.55-.53 2.1-1.08 2.1s-.88-.55-1.08-2.1c-.62-4.7-1.52-5.6-6.22-6.22C3.15 12.88 2.6 12.55 2.6 12s.55-.88 2.1-1.08c4.7-.62 5.6-1.52 6.22-6.22C11.12 3.15 11.45 2.6 12 2.6Z" />
 							</svg>
-							Operational AI Infrastructure
+							AI Calling Infrastructure
 						</span>
 
 						<h1>
@@ -784,7 +795,7 @@ export default function Home() {
 									className="headline-line-inner appear appear--mask"
 									style={{ "--d": "0.42s" } as React.CSSProperties}
 								>
-									Train <em>AI agents</em> on your
+									Let <em>AI agents</em> call your
 								</span>
 							</span>
 							<span className="headline-line">
@@ -792,7 +803,7 @@ export default function Home() {
 									className="headline-line-inner appear appear--mask"
 									style={{ "--d": "0.62s" } as React.CSSProperties}
 								>
-									workflows in minutes.
+									leads in minutes.
 								</span>
 							</span>
 						</h1>
@@ -801,24 +812,24 @@ export default function Home() {
 							className="lede appear appear--soft"
 							style={{ "--d": "0.82s" } as React.CSSProperties}
 						>
-							Deploy adaptive AI agents that learn, execute, and scale
-							operational tasks across your business.
+							Deploy voice agents that dial, qualify, and follow up on every
+							lead — inside your calling windows, consent rules, and DNC list.
 						</p>
 
 						<div className="hero-actions">
-							<a
+							<Link
 								className="btn btn-solid appear appear--btn"
-								href="#start"
+								href="/login"
 								style={{ "--d": "0.96s" } as React.CSSProperties}
 							>
 								Start for Free
-							</a>
+							</Link>
 							<a
 								className="btn btn-ghost appear appear--side"
-								href="#demo"
+								href="#testimonials"
 								style={{ "--d": "1.10s" } as React.CSSProperties}
 							>
-								See it in action
+								Hear from customers
 							</a>
 						</div>
 					</div>
@@ -884,7 +895,7 @@ export default function Home() {
 								y="10.9"
 							/>
 						</svg>
-						4.2M+ workflows automated
+						2.6M+ calls placed
 					</span>
 
 					<span
@@ -920,7 +931,7 @@ export default function Home() {
 								strokeWidth="1.85"
 							/>
 						</svg>
-						92% reduction in manual operations
+						74% less manual dialling
 					</span>
 
 					<span
@@ -963,10 +974,16 @@ export default function Home() {
 								e
 							</text>
 						</svg>
-						180+ operational teams onboarded
+						240+ sales teams onboarded
 					</span>
 				</footer>
 			</div>
+
+			<Features className={`${inter.variable} ${instrumentSerif.variable}`} />
+
+			<Testimonials
+				className={`${inter.variable} ${instrumentSerif.variable}`}
+			/>
 
 			<VesperMotion />
 		</>
