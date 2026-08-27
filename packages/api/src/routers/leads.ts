@@ -1,10 +1,16 @@
-import { lead as leadTable, organizationSettings } from "@doki/db/schema";
+import {
+	consentRecord,
+	lead as leadTable,
+	organizationSettings,
+} from "@doki/db/schema";
 import {
 	type CallPurpose,
 	evaluatePolicy,
 	loadPolicyContext,
 	normalizePhone,
 	type PolicyDecision,
+	parseLeadCsv,
+	recordAudit,
 	timezoneForPhone,
 } from "@doki/domain";
 import { ORPCError } from "@orpc/server";
@@ -104,6 +110,163 @@ export const leadsRouter = {
 							monthlyMinutesCap: ctx.settings.monthlyMinutesCap,
 						}
 					: null,
+			};
+		}),
+
+	/**
+	 * Parses a CSV without writing anything, so the user sees exactly what will
+	 * happen — including which rows will be rejected and why — before committing.
+	 */
+	previewImport: tenantProcedure
+		.input(z.object({ csv: z.string().min(1).max(5_000_000) }))
+		.handler(async ({ context, input }) => {
+			const { db, organizationId } = context;
+			const settings = await ensureSettings(db, organizationId);
+
+			const preview = parseLeadCsv(input.csv, {
+				defaultTimezone: settings.defaultTimezone,
+			});
+
+			return {
+				headers: preview.headers,
+				mapping: preview.mapping,
+				totalRows: preview.totalRows,
+				validCount: preview.valid.length,
+				// Only a sample — a 10k-row file must not be echoed back whole.
+				sample: preview.valid.slice(0, 10),
+				rejected: preview.rejected.slice(0, 50),
+				rejectedCount: preview.rejected.length,
+				duplicatesInFile: preview.duplicatesInFile.slice(0, 50),
+				duplicateCount: preview.duplicatesInFile.length,
+			};
+		}),
+
+	/**
+	 * Commits a parsed CSV.
+	 *
+	 * `consentAttested` is not decoration. Under TCCCPR the customer must be
+	 * able to show how consent was obtained, so importing with consent requires
+	 * an explicit attestation plus a source, and every granted lead gets an
+	 * append-only consent record naming the user who attested it.
+	 */
+	commitImport: tenantProcedure
+		.input(
+			z.object({
+				csv: z.string().min(1).max(5_000_000),
+				source: z.string().trim().max(120).optional(),
+				consentAttested: z.boolean().default(false),
+				consentSource: z
+					.enum([
+						"WEB_FORM",
+						"INBOUND_ENQUIRY",
+						"EXISTING_CUSTOMER",
+						"IMPORT_ATTESTED",
+						"MANUAL_ENTRY",
+					])
+					.optional(),
+				consentEvidence: z.string().trim().max(500).optional(),
+			}),
+		)
+		.handler(async ({ context, input }) => {
+			const { db, organizationId, user } = context;
+			const settings = await ensureSettings(db, organizationId);
+
+			if (input.consentAttested && !input.consentSource) {
+				throw new ORPCError("BAD_REQUEST", {
+					message: "Attesting consent requires a consent source.",
+				});
+			}
+
+			const preview = parseLeadCsv(input.csv, {
+				defaultTimezone: settings.defaultTimezone,
+			});
+
+			if (preview.valid.length === 0) {
+				throw new ORPCError("BAD_REQUEST", {
+					message:
+						preview.rejected[0]?.reason ??
+						"No importable rows found in this file.",
+				});
+			}
+
+			const now = new Date();
+			const granted = input.consentAttested;
+
+			const rows = preview.valid.map((lead) => ({
+				organizationId,
+				name: lead.name,
+				company: lead.company,
+				email: lead.email,
+				phoneRaw: lead.phoneRaw,
+				phoneE164: lead.phoneE164,
+				phoneCountry: lead.phoneCountry,
+				source: lead.source ?? input.source ?? "csv-import",
+				timezone: lead.timezone,
+				consentStatus: granted ? ("GRANTED" as const) : ("UNKNOWN" as const),
+				consentSource: granted ? input.consentSource : null,
+				consentAt: granted ? now : null,
+				consentEvidence: granted ? (input.consentEvidence ?? null) : null,
+				consentAttestedBy: granted ? user.id : null,
+			}));
+
+			// Chunked so a large file does not build one enormous statement.
+			const CHUNK = 500;
+			const inserted: { id: string; phoneE164: string }[] = [];
+
+			for (let i = 0; i < rows.length; i += CHUNK) {
+				const batch = rows.slice(i, i + CHUNK);
+				const created = await db
+					.insert(leadTable)
+					.values(batch)
+					// A number already in this workspace is skipped, not overwritten:
+					// an existing lead may carry consent or opt-out state that a
+					// fresh spreadsheet must never silently clobber.
+					.onConflictDoNothing({
+						target: [leadTable.organizationId, leadTable.phoneE164],
+					})
+					.returning({ id: leadTable.id, phoneE164: leadTable.phoneE164 });
+				inserted.push(...created);
+			}
+
+			if (granted && inserted.length > 0) {
+				for (let i = 0; i < inserted.length; i += CHUNK) {
+					await db.insert(consentRecord).values(
+						inserted.slice(i, i + CHUNK).map((row) => ({
+							organizationId,
+							leadId: row.id,
+							phoneE164: row.phoneE164,
+							status: "GRANTED" as const,
+							source: input.consentSource ?? ("IMPORT_ATTESTED" as const),
+							evidence: input.consentEvidence ?? null,
+							attestedBy: user.id,
+							occurredAt: now,
+						})),
+					);
+				}
+			}
+
+			await recordAudit(db, {
+				organizationId,
+				actor: { type: "USER", id: user.id },
+				action: "leads.imported",
+				resourceType: "lead",
+				metadata: {
+					totalRows: preview.totalRows,
+					created: inserted.length,
+					alreadyExisted: preview.valid.length - inserted.length,
+					rejected: preview.rejected.length,
+					duplicatesInFile: preview.duplicatesInFile.length,
+					consentAttested: granted,
+					consentSource: input.consentSource ?? null,
+				},
+			});
+
+			return {
+				created: inserted.length,
+				alreadyExisted: preview.valid.length - inserted.length,
+				rejected: preview.rejected.length,
+				duplicatesInFile: preview.duplicatesInFile.length,
+				totalRows: preview.totalRows,
 			};
 		}),
 

@@ -13,7 +13,9 @@
 	},
 	"scripts": {
 		"check-types": "tsc --noEmit",
-		"verify": "bun run test/policy.check.ts"
+		"verify": "bun run test/policy.check.ts && bun run test/import.check.ts",
+		"verify:followups": "bun run test/followups.check.ts",
+		"verify:db": "bun run test/followups.check.ts && bun run test/import-commit.check.ts"
 	},
 	"dependencies": {
 		"@doki/db": "workspace:*",

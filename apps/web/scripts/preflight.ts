@@ -282,7 +282,7 @@ async function checkWorkspace(): Promise<void> {
 }
 
 // ------------------------------------------------------------------- run ----
-console.log("\nCallwise preflight\n" + "=".repeat(60));
+console.log(`\nCallwise preflight\n${"=".repeat(60)}`);
 
 try {
 	await checkWorkspace();
@@ -311,7 +311,7 @@ for (const r of results) {
 const failures = results.filter((r) => r.level === "fail").length;
 const warnings = results.filter((r) => r.level === "warn").length;
 
-console.log("\n" + "=".repeat(60));
+console.log(`\n${"=".repeat(60)}`);
 if (failures > 0) {
 	console.log(
 		`${failures} blocking issue(s), ${warnings} warning(s). Calls will NOT go out.`,

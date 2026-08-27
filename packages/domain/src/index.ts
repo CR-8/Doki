@@ -4,5 +4,8 @@ export * from "./calls/analyze";
 export * from "./calls/dispatch";
 export * from "./calls/ingest";
 export * from "./calls/prompt";
+export * from "./followups/runner";
+export * from "./followups/schedule";
+export * from "./leads/import";
 export * from "./phone";
 export * from "./policy/can-call";

@@ -3,6 +3,7 @@ import type { RouterClient } from "@orpc/server";
 import { protectedProcedure, publicProcedure } from "../index";
 import { agentsRouter } from "./agents";
 import { callsRouter } from "./calls";
+import { followUpsRouter } from "./followups";
 import { leadsRouter } from "./leads";
 import { settingsRouter } from "./settings";
 
@@ -19,6 +20,7 @@ export const appRouter = {
 	leads: leadsRouter,
 	agents: agentsRouter,
 	calls: callsRouter,
+	followUps: followUpsRouter,
 	settings: settingsRouter,
 };
 

@@ -3,6 +3,7 @@ export * from "./auth";
 export * from "./calls";
 export * from "./compliance";
 export * from "./enums";
+export * from "./followups";
 export * from "./leads";
 export * from "./tenant";
 export * from "./tts";

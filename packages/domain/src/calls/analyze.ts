@@ -12,6 +12,7 @@ import { env } from "@doki/env/server";
 import { and, asc, desc, eq, ne } from "drizzle-orm";
 
 import { recordAudit } from "../audit";
+import { scheduleFollowUp } from "../followups/schedule";
 import { applyOptOut } from "./ingest";
 
 /**
@@ -333,6 +334,23 @@ export async function analyzeCall(
 			note: "Requested during call (detected in transcript)",
 		});
 		optedOut = true;
+	}
+
+	// --- Schedule the follow-up the model proposed ------------------------
+	// Only when the outcome was confident enough to act on, and never for a
+	// lead that just opted out — suppression must not be followed by a call.
+	if (lead && promoted && !requestedOptOut && nextActionAt) {
+		await scheduleFollowUp(db, {
+			organizationId,
+			leadId: lead.id,
+			sourceCallId: callId,
+			agentId: call.agentId,
+			type: "CALL",
+			dueAt: nextActionAt,
+			note: analysis.nextAction,
+			source: "AI_ANALYSIS",
+			actor: { type: "AI", id: result.model },
+		});
 	}
 
 	await recordAudit(db, {

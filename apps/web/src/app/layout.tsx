@@ -3,7 +3,6 @@ import { Geist, Geist_Mono, Inter, Space_Grotesk } from "next/font/google";
 
 import "../index.css";
 import { cn } from "@doki/ui/lib/utils";
-import Header from "@/components/header";
 import Providers from "@/components/providers";
 
 const spaceGroteskHeading = Space_Grotesk({
@@ -42,12 +41,7 @@ export default function RootLayout({
 			<body
 				className={`${geistSans.variable} ${geistMono.variable} antialiased`}
 			>
-				<Providers>
-					<div className="grid h-svh grid-rows-[auto_1fr]">
-						<Header />
-						{children}
-					</div>
-				</Providers>
+				<Providers>{children}</Providers>
 			</body>
 		</html>
 	);

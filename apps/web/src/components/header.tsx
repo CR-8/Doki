@@ -10,6 +10,7 @@ export default function Header() {
 		{ to: "/", label: "Home" },
 		{ to: "/leads", label: "Leads" },
 		{ to: "/calls", label: "Calls" },
+		{ to: "/follow-ups", label: "Follow-ups" },
 		{ to: "/agents", label: "Agents" },
 		{ to: "/settings", label: "Settings" },
 	];

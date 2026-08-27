@@ -28,6 +28,7 @@ import { toast } from "sonner";
 import { orpc } from "@/utils/orpc";
 
 import { AddLeadDialog } from "./add-lead-dialog";
+import { ImportLeadsDialog } from "./import-leads-dialog";
 import { PolicyBadge, type PolicyDecisionView } from "./policy-badge";
 
 type Purpose = "SERVICE" | "PROMOTIONAL" | "TRANSACTIONAL";
@@ -174,6 +175,7 @@ export function LeadsTable() {
 							</CardContent>
 						</Card>
 					) : null}
+					<ImportLeadsDialog />
 					<AddLeadDialog />
 				</div>
 			</div>

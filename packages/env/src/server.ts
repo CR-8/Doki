@@ -15,6 +15,9 @@ export const env = createEnv({
 		VERCEL: z.string().optional(),
 		AWS_LAMBDA_FUNCTION_NAME: z.string().optional(),
 
+		/** Shared secret for the scheduled follow-up runner endpoint. */
+		CRON_SECRET: z.string().optional(),
+
 		/** Public origin used to build provider webhook callback URLs. */
 		APP_URL: z.url().default("http://localhost:3001"),
 
