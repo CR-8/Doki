@@ -19,6 +19,7 @@ import { z } from "zod";
 
 import { tenantProcedure } from "../index";
 import { audioPublisher } from "../lib/audio-publisher";
+import { invalidateDashboard } from "../lib/cache";
 
 export const callsRouter = {
 	list: tenantProcedure
@@ -260,6 +261,7 @@ export const callsRouter = {
 				throw new ORPCError("BAD_REQUEST", { message: result.reason });
 			}
 
+			await invalidateDashboard(organizationId);
 			return result;
 		}),
 
@@ -296,6 +298,7 @@ export const callsRouter = {
 				note: input.note,
 			});
 
+			await invalidateDashboard(organizationId);
 			return { ok: true };
 		}),
 };

@@ -195,6 +195,7 @@ export function LeadsTable() {
 						<Button
 							size="sm"
 							variant="outline"
+							nativeButton={false}
 							render={<Link href="/agents" />}
 						>
 							Create agent

@@ -15,6 +15,10 @@ export const env = createEnv({
 		VERCEL: z.string().optional(),
 		AWS_LAMBDA_FUNCTION_NAME: z.string().optional(),
 
+		// ---- Cache (optional; falls back to per-instance memory) -------------
+		UPSTASH_REDIS_REST_URL: z.string().optional(),
+		UPSTASH_REDIS_REST_TOKEN: z.string().optional(),
+
 		/** Shared secret for the scheduled follow-up runner endpoint. */
 		CRON_SECRET: z.string().optional(),
 

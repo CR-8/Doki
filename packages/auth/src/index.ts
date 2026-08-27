@@ -6,6 +6,7 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
 import { organization } from "better-auth/plugins";
+import { asc, eq } from "drizzle-orm";
 
 /**
  * Roles inside a workspace. Public signup can never select these — a new user
@@ -19,6 +20,20 @@ export const ROLES = {
 
 export function createAuth() {
 	const db = createDb();
+
+	/** The workspace a returning user should land in: their earliest membership. */
+	async function resolveActiveOrganization(
+		userId: string,
+	): Promise<string | null> {
+		const [membership] = await db
+			.select({ organizationId: tenantSchema.member.organizationId })
+			.from(tenantSchema.member)
+			.where(eq(tenantSchema.member.userId, userId))
+			.orderBy(asc(tenantSchema.member.createdAt))
+			.limit(1);
+
+		return membership?.organizationId ?? null;
+	}
 
 	return betterAuth({
 		database: drizzleAdapter(db, {
@@ -35,6 +50,27 @@ export function createAuth() {
 			updateAge: 60 * 60 * 24,
 			// Short cache so revocation takes effect quickly.
 			cookieCache: { enabled: true, maxAge: 60 },
+		},
+		databaseHooks: {
+			session: {
+				create: {
+					/**
+					 * Sets the active workspace on every new session.
+					 *
+					 * Without this, `session.activeOrganizationId` starts null on each
+					 * sign-in and every tenant-scoped page reads that as "this user has
+					 * no workspace" — so a returning member is asked to create one they
+					 * already belong to. The organization plugin only sets this when
+					 * `setActive` is called explicitly, which never happens on login.
+					 */
+					before: async (session) => {
+						const activeOrganizationId = await resolveActiveOrganization(
+							session.userId,
+						);
+						return { data: { ...session, activeOrganizationId } };
+					},
+				},
+			},
 		},
 		secret: env.BETTER_AUTH_SECRET,
 		baseURL: env.BETTER_AUTH_URL,

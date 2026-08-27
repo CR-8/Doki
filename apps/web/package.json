@@ -39,6 +39,7 @@
 		"next-themes": "catalog:",
 		"react": "catalog:",
 		"react-dom": "catalog:",
+		"recharts": "^3.10.1",
 		"shadcn": "^4.19.0",
 		"sonner": "catalog:",
 		"tailwind-merge": "^3.6.0",

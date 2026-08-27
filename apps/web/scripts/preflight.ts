@@ -112,12 +112,15 @@ async function checkTwilio(): Promise<void> {
 				capabilities?: { voice?: boolean };
 			}[];
 		};
-		const match = body.incoming_phone_numbers?.[0];
+		const owned = body.incoming_phone_numbers ?? [];
+		const match = owned.find((n) => n.phone_number === from) ?? owned[0];
 		if (!match) {
 			fail(
 				"Twilio from-number",
-				`${from} is not owned by this account`,
-				"Buy or verify the number in the Twilio console.",
+				owned.length === 0
+					? `${from} is not owned — this account owns no numbers at all`
+					: `${from} is not owned by this account`,
+				"Buy a voice-capable number in Twilio console > Phone Numbers > Buy a number, then set TWILIO_FROM_NUMBER to it.",
 			);
 		} else if (match.capabilities?.voice === false) {
 			fail("Twilio from-number", `${from} has no voice capability`);
@@ -282,7 +285,7 @@ async function checkWorkspace(): Promise<void> {
 }
 
 // ------------------------------------------------------------------- run ----
-console.log(`\nCallwise preflight\n${"=".repeat(60)}`);
+console.log(`\ndoki preflight\n${"=".repeat(60)}`);
 
 try {
 	await checkWorkspace();

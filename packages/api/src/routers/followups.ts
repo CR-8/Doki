@@ -11,6 +11,7 @@ import { z } from "zod";
 
 import { tenantProcedure } from "../index";
 import { audioPublisher } from "../lib/audio-publisher";
+import { invalidateDashboard } from "../lib/cache";
 
 export const followUpsRouter = {
 	list: tenantProcedure
@@ -204,6 +205,7 @@ export const followUpsRouter = {
 					message: "Only pending follow-ups can be canceled",
 				});
 			}
+			await invalidateDashboard(organizationId);
 			return { ok: true };
 		}),
 

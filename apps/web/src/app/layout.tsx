@@ -1,21 +1,19 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Inter, Space_Grotesk } from "next/font/google";
+import { DM_Sans, Geist_Mono, Inter } from "next/font/google";
 
 import "../index.css";
 import { cn } from "@doki/ui/lib/utils";
 import Providers from "@/components/providers";
 
-const spaceGroteskHeading = Space_Grotesk({
+// DM Sans carries every role, 80px display down to 12px micro labels.
+const dmSans = DM_Sans({
 	subsets: ["latin"],
-	variable: "--font-heading",
+	variable: "--font-dm-sans",
+	weight: ["400", "500", "600", "700"],
 });
 
-const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
-
-const geistSans = Geist({
-	variable: "--font-geist-sans",
-	subsets: ["latin"],
-});
+// Documented fallback only; never used as a second display face.
+const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 const geistMono = Geist_Mono({
 	variable: "--font-geist-mono",
@@ -36,11 +34,9 @@ export default function RootLayout({
 		<html
 			lang="en"
 			suppressHydrationWarning
-			className={cn("font-sans", inter.variable, spaceGroteskHeading.variable)}
+			className={cn("font-sans", dmSans.variable, inter.variable)}
 		>
-			<body
-				className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-			>
+			<body className={`${geistMono.variable} antialiased`}>
 				<Providers>{children}</Providers>
 			</body>
 		</html>

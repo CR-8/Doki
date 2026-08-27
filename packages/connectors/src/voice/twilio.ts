@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import twilio, { type Twilio } from "twilio";
 
 import {
 	type PlaceCallRequest,
@@ -13,13 +13,12 @@ import {
 type TwilioConfig = {
 	accountSid: string;
 	authToken: string;
-	/** E.164 caller ID, or a Twilio Messaging/Voice number you own. */
+	/** E.164 caller ID. Must be a voice-capable number this account owns. */
 	fromNumber: string;
 	/** Public base URL used to build status-callback URLs. */
 	appUrl: string;
 	/** Record calls so the review screen has audio to play. */
 	record?: boolean;
-	baseUrl?: string;
 	/**
 	 * Turns text into a publicly fetchable audio URL. Supplied by the app so
 	 * this provider stays free of storage and database concerns.
@@ -40,7 +39,7 @@ export type AudioPublisher = {
 };
 
 /** Twilio's call vocabulary -> ours. Unknown values fail closed to FAILED. */
-function mapStatus(status: string | undefined): VoiceCallStatus {
+function mapStatus(status: string | undefined | null): VoiceCallStatus {
 	switch (status) {
 		case "queued":
 			return "QUEUED";
@@ -83,23 +82,17 @@ function escapeXml(value: string): string {
  * cost attribution work end to end with a phone that actually rings. For
  * back-and-forth dialogue, use the Vapi provider.
  *
- * Speech comes from Sarvam via the injected publisher, never from Twilio's own
- * <Say>: carrier-provided voices mispronounce Hindi and Hinglish badly enough
- * to undermine the whole product.
+ * All speech comes from Sarvam via the injected publisher and is delivered
+ * with TwiML <Play>. Twilio's own text-to-speech voices are never used:
+ * they mispronounce Hindi and code-mixed Hinglish badly enough to undermine
+ * the product in its target market.
  */
 export class TwilioVoiceProvider implements VoiceProvider {
 	readonly name = "twilio";
-	private readonly baseUrl: string;
+	private readonly client: Twilio;
 
 	constructor(private readonly config: TwilioConfig) {
-		this.baseUrl = config.baseUrl ?? "https://api.twilio.com";
-	}
-
-	private get authHeader(): string {
-		const encoded = Buffer.from(
-			`${this.config.accountSid}:${this.config.authToken}`,
-		).toString("base64");
-		return `Basic ${encoded}`;
+		this.client = twilio(config.accountSid, config.authToken);
 	}
 
 	/** Announcement TwiML playing Sarvam-synthesised audio. */
@@ -125,108 +118,93 @@ export class TwilioVoiceProvider implements VoiceProvider {
 			organizationId: req.organizationId,
 		});
 
-		const body = new URLSearchParams({
-			To: req.toNumber,
-			From: this.config.fromNumber,
-			Twiml: this.buildTwiml(audioUrl),
-			StatusCallback: statusCallback,
-			StatusCallbackMethod: "POST",
-			// Terminal states only would lose ringing/answered transitions.
-			MachineDetection: "Enable",
-			Timeout: "30",
-		});
-		for (const event of ["initiated", "ringing", "answered", "completed"]) {
-			body.append("StatusCallbackEvent", event);
-		}
-		if (this.config.record !== false) {
-			body.append("Record", "true");
-			body.append("RecordingStatusCallback", statusCallback);
-			body.append("RecordingStatusCallbackMethod", "POST");
-		}
+		try {
+			const call = await this.client.calls.create({
+				from: this.config.fromNumber,
+				to: req.toNumber,
+				// Inline TwiML rather than a `url`, so the spoken content is decided
+				// here and never fetched from a separate endpoint we would also
+				// have to authenticate.
+				twiml: this.buildTwiml(audioUrl),
+				statusCallback,
+				statusCallbackMethod: "POST",
+				// Terminal states alone would lose the ringing/answered transitions.
+				statusCallbackEvent: ["initiated", "ringing", "answered", "completed"],
+				machineDetection: "Enable",
+				timeout: 30,
+				...(this.config.record !== false
+					? {
+							record: true,
+							recordingStatusCallback: statusCallback,
+							recordingStatusCallbackMethod: "POST" as const,
+						}
+					: {}),
+			});
 
-		const res = await fetch(
-			`${this.baseUrl}/2010-04-01/Accounts/${this.config.accountSid}/Calls.json`,
-			{
-				method: "POST",
-				headers: {
-					authorization: this.authHeader,
-					"content-type": "application/x-www-form-urlencoded",
-				},
-				body,
-			},
-		);
+			if (!call.sid) {
+				throw new VoiceProviderError(
+					"Twilio did not return a call SID",
+					502,
+					true,
+				);
+			}
 
-		if (!res.ok) {
-			const text = await res.text().catch(() => "");
+			return { providerCallId: call.sid, status: mapStatus(call.status) };
+		} catch (error) {
+			if (error instanceof VoiceProviderError) throw error;
+
+			// The SDK surfaces Twilio's numeric error codes, which say far more
+			// than an HTTP status: 21210 is an unowned caller ID, 21219 an
+			// unverified destination on a trial account.
+			const err = error as { status?: number; code?: number; message?: string };
+			const detail = err.code ? ` [Twilio ${err.code}]` : "";
+			const status = err.status ?? 502;
+
 			throw new VoiceProviderError(
-				`Twilio call failed (${res.status}): ${text.slice(0, 500)}`,
-				res.status,
-				res.status === 429 || res.status >= 500,
+				`Twilio call failed${detail}: ${err.message ?? String(error)}`,
+				status,
+				status === 429 || status >= 500,
 			);
 		}
-
-		const payload = (await res.json()) as { sid?: string; status?: string };
-		if (!payload.sid) {
-			throw new VoiceProviderError(
-				"Twilio did not return a call SID",
-				res.status,
-				true,
-			);
-		}
-
-		return { providerCallId: payload.sid, status: mapStatus(payload.status) };
 	}
 
 	async endCall(providerCallId: string): Promise<void> {
-		const res = await fetch(
-			`${this.baseUrl}/2010-04-01/Accounts/${this.config.accountSid}/Calls/${providerCallId}.json`,
-			{
-				method: "POST",
-				headers: {
-					authorization: this.authHeader,
-					"content-type": "application/x-www-form-urlencoded",
-				},
-				body: new URLSearchParams({ Status: "completed" }),
-			},
-		);
-		if (!res.ok && res.status !== 404) {
+		try {
+			await this.client.calls(providerCallId).update({ status: "completed" });
+		} catch (error) {
+			const err = error as { status?: number; message?: string };
+			// Already gone is not a failure.
+			if (err.status === 404) return;
 			throw new VoiceProviderError(
-				`Failed to end call ${providerCallId}`,
-				res.status,
+				`Failed to end call ${providerCallId}: ${err.message ?? String(error)}`,
+				err.status ?? 502,
 				true,
 			);
 		}
 	}
 
 	/**
-	 * Twilio's signature is HMAC-SHA1 over the full request URL with every
-	 * POST parameter appended in sorted key order — so both the URL and the
-	 * exact form body matter. A proxy that rewrites the URL will break this;
-	 * `APP_URL` must match what Twilio was configured to call.
+	 * Delegates to Twilio's own validator rather than hand-rolling the HMAC.
+	 *
+	 * The signature covers the full request URL plus every POST parameter in
+	 * sorted order, so `APP_URL` must match exactly what Twilio was told to
+	 * call — a proxy that rewrites the URL breaks verification, and that shows
+	 * up as 401 rather than as a connection error.
 	 */
 	verifyWebhook(req: WebhookRequest): boolean {
-		const received =
+		const signature =
 			req.headers["x-twilio-signature"] ??
 			req.headers["X-Twilio-Signature"] ??
 			"";
-		if (!received) return false;
+		if (!signature) return false;
 
-		const params = new URLSearchParams(req.rawBody);
-		const sorted = [...params.keys()].sort();
-
-		let payload = req.url;
-		for (const key of sorted) {
-			payload += key + params.get(key);
-		}
-
-		const expected = createHmac("sha1", this.config.authToken)
-			.update(Buffer.from(payload, "utf8"))
-			.digest("base64");
-
-		const a = Buffer.from(received);
-		const b = Buffer.from(expected);
-		if (a.length !== b.length) return false;
-		return timingSafeEqual(a, b);
+		const params = Object.fromEntries(new URLSearchParams(req.rawBody));
+		return twilio.validateRequest(
+			this.config.authToken,
+			signature,
+			req.url,
+			params,
+		);
 	}
 
 	parseWebhook(req: WebhookRequest): VoiceWebhookEvent | null {
@@ -254,7 +232,7 @@ export class TwilioVoiceProvider implements VoiceProvider {
 			};
 		}
 
-		const status = mapStatus(params.get("CallStatus") ?? undefined);
+		const status = mapStatus(params.get("CallStatus"));
 		const TERMINAL: VoiceCallStatus[] = [
 			"COMPLETED",
 			"FAILED",

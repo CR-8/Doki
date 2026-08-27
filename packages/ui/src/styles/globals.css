@@ -133,3 +133,77 @@
 		cursor: pointer;
 	}
 }
+
+/* ---------------------------------------------------------------------------
+   DESIGN.md tokens
+   Stark monochrome canvas, DM Sans throughout, pill-shaped interactive
+   elements. Brand colours are deliberately NOT wired into buttons or general
+   surfaces — per the design system they encode product identity only.
+--------------------------------------------------------------------------- */
+:root {
+	/* Radius scale. Cards soften at 16px; every button/badge/tab is a pill. */
+	--radius: 1rem;
+	--radius-xs: 0.25rem;
+	--radius-sm: 0.375rem;
+	--radius-md: 0.5rem;
+	--radius-lg: 0.75rem;
+	--radius-xl: 1rem;
+	--radius-xxl: 1.25rem;
+	--radius-xxxl: 1.5rem;
+	--radius-hero: 2rem;
+	--radius-full: 9999px;
+
+	/* Product-identity accents. Used on identity cards, never on controls. */
+	--brand-coral: oklch(0.64 0.21 27);
+	--brand-magenta: oklch(0.61 0.25 340);
+	--brand-blue: oklch(0.55 0.19 258);
+	--brand-purple: oklch(0.53 0.21 295);
+
+	/* Semantic pair for success badges. */
+	--success-bg: oklch(0.95 0.05 155);
+	--success-text: oklch(0.45 0.13 155);
+}
+
+.dark {
+	--brand-coral: oklch(0.68 0.19 27);
+	--brand-magenta: oklch(0.66 0.22 340);
+	--brand-blue: oklch(0.62 0.17 258);
+	--brand-purple: oklch(0.6 0.19 295);
+	--success-bg: oklch(0.28 0.06 155);
+	--success-text: oklch(0.82 0.13 155);
+}
+
+@theme inline {
+	--font-sans:
+		var(--font-dm-sans), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+	--color-brand-coral: var(--brand-coral);
+	--color-brand-magenta: var(--brand-magenta);
+	--color-brand-blue: var(--brand-blue);
+	--color-brand-purple: var(--brand-purple);
+	--color-success-bg: var(--success-bg);
+	--color-success-text: var(--success-text);
+}
+
+/* Pill geometry is a brand signature: every button, badge and tab. */
+@layer components {
+	[data-slot="button"],
+	[data-slot="badge"] {
+		border-radius: var(--radius-full);
+	}
+}
+
+/* Tight leading and negative tracking on display sizes — the magazine-grade
+   typographic signature the system is built around. */
+@layer base {
+	.text-display {
+		font-size: clamp(2rem, 5vw, 3.5rem);
+		font-weight: 600;
+		line-height: 1.1;
+		letter-spacing: -0.03em;
+	}
+
+	h1,
+	h2 {
+		letter-spacing: -0.02em;
+	}
+}

@@ -18,6 +18,7 @@ import { and, count, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { tenantProcedure } from "../index";
+import { invalidateDashboard } from "../lib/cache";
 
 const purposeSchema = z
 	.enum(["PROMOTIONAL", "TRANSACTIONAL", "SERVICE"])
@@ -261,6 +262,8 @@ export const leadsRouter = {
 				},
 			});
 
+			await invalidateDashboard(organizationId);
+
 			return {
 				created: inserted.length,
 				alreadyExisted: preview.valid.length - inserted.length,
@@ -378,6 +381,7 @@ export const leadsRouter = {
 				});
 			}
 
+			await invalidateDashboard(organizationId);
 			return created;
 		}),
 };

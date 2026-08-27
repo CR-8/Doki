@@ -1,4 +1,4 @@
-# Deploying to Vercel
+# Deploying doki to Vercel
 
 Vercel gives you a public HTTPS origin, which is what Twilio needs for both
 media fetches and status callbacks. It replaces the tunnel entirely.
@@ -9,7 +9,7 @@ Vercel deploys from Git. From the repo root:
 
 ```bash
 git add -A
-git commit -m "Callwise: policy engine, dispatch, Sarvam TTS"
+git commit -m "doki: policy engine, dispatch, Sarvam TTS"
 git push
 ```
 

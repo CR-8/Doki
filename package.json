@@ -48,6 +48,7 @@
 		"@biomejs/biome": "^2.5.6",
 		"@doki/config": "workspace:*",
 		"@types/node": "catalog:",
+		"shadcn": "^4.19.0",
 		"turbo": "^2.10.7",
 		"typescript": "catalog:"
 	},
