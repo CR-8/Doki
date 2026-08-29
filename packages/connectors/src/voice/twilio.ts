@@ -35,7 +35,7 @@ export type AudioPublisher = {
 		text: string;
 		language: string;
 		organizationId: string;
-	}): Promise<{ url: string }>;
+	}): Promise<{ url: string; id: string }>;
 };
 
 /** Twilio's call vocabulary -> ours. Unknown values fail closed to FAILED. */
@@ -64,15 +64,6 @@ function mapStatus(status: string | undefined | null): VoiceCallStatus {
 	}
 }
 
-function escapeXml(value: string): string {
-	return value
-		.replaceAll("&", "&amp;")
-		.replaceAll("<", "&lt;")
-		.replaceAll(">", "&gt;")
-		.replaceAll('"', "&quot;")
-		.replaceAll("'", "&apos;");
-}
-
 /**
  * Telephony-only provider for testing the pipeline against a real carrier.
  *
@@ -90,55 +81,80 @@ function escapeXml(value: string): string {
 export class TwilioVoiceProvider implements VoiceProvider {
 	readonly name = "twilio";
 	private readonly client: Twilio;
+	/** Cached account-capability probe; null until first resolved. */
+	private trial: boolean | null = null;
 
 	constructor(private readonly config: TwilioConfig) {
 		this.client = twilio(config.accountSid, config.authToken);
 	}
 
-	/** Announcement TwiML playing Sarvam-synthesised audio. */
-	private buildTwiml(audioUrl: string): string {
-		return [
-			'<?xml version="1.0" encoding="UTF-8"?>',
-			"<Response>",
-			`<Play>${escapeXml(audioUrl)}</Play>`,
-			'<Pause length="1"/>',
-			"<Hangup/>",
-			"</Response>",
-		].join("");
+	/**
+	 * Trial accounts reject most call parameters outright, including inline
+	 * TwiML. Detected once and cached, so a paid account still gets recording,
+	 * answering-machine detection and status callbacks.
+	 */
+	private async isTrialAccount(): Promise<boolean> {
+		if (this.trial !== null) return this.trial;
+		try {
+			const account = await this.client.api
+				.accounts(this.config.accountSid)
+				.fetch();
+			this.trial = account.type === "Trial";
+		} catch {
+			// Fail safe: assume trial, which sends the minimal parameter set.
+			this.trial = true;
+		}
+		return this.trial;
 	}
 
 	async placeCall(req: PlaceCallRequest): Promise<PlaceCallResult> {
-		const statusCallback = `${this.config.appUrl.replace(/\/$/, "")}/api/webhooks/twilio`;
+		const appUrl = this.config.appUrl.replace(/\/$/, "");
+		const statusCallback = `${appUrl}/api/webhooks/twilio`;
 
 		// Synthesise before dialling. If speech fails the call is never placed,
 		// which is correct: a silent call is worse than no call.
-		const { url: audioUrl } = await this.config.audio.publish({
+		const audio = await this.config.audio.publish({
 			text: req.firstMessage,
 			language: req.language,
 			organizationId: req.organizationId,
 		});
 
+		const trial = await this.isTrialAccount();
+
+		// `Twiml` (inline) is a paid-only parameter, so the document is served
+		// from our own endpoint instead and fetched by Twilio.
+		const twimlUrl = `${appUrl}/api/twiml/play?a=${encodeURIComponent(audio.id)}`;
+
 		try {
 			const call = await this.client.calls.create({
 				from: this.config.fromNumber,
 				to: req.toNumber,
-				// Inline TwiML rather than a `url`, so the spoken content is decided
-				// here and never fetched from a separate endpoint we would also
-				// have to authenticate.
-				twiml: this.buildTwiml(audioUrl),
-				statusCallback,
-				statusCallbackMethod: "POST",
-				// Terminal states alone would lose the ringing/answered transitions.
-				statusCallbackEvent: ["initiated", "ringing", "answered", "completed"],
-				machineDetection: "Enable",
-				timeout: 30,
-				...(this.config.record !== false
-					? {
-							record: true,
-							recordingStatusCallback: statusCallback,
-							recordingStatusCallbackMethod: "POST" as const,
-						}
-					: {}),
+				url: twimlUrl,
+				// A trial account accepts From, To and Url and nothing else —
+				// `method` included. Twilio defaults to POST, which our TwiML
+				// route handles, so omitting it costs nothing.
+				...(trial
+					? {}
+					: {
+							method: "POST" as const,
+							statusCallback,
+							statusCallbackMethod: "POST" as const,
+							statusCallbackEvent: [
+								"initiated",
+								"ringing",
+								"answered",
+								"completed",
+							],
+							machineDetection: "Enable",
+							timeout: 30,
+							...(this.config.record !== false
+								? {
+										record: true,
+										recordingStatusCallback: statusCallback,
+										recordingStatusCallbackMethod: "POST" as const,
+									}
+								: {}),
+						}),
 			});
 
 			if (!call.sid) {
@@ -154,7 +170,7 @@ export class TwilioVoiceProvider implements VoiceProvider {
 			if (error instanceof VoiceProviderError) throw error;
 
 			// The SDK surfaces Twilio's numeric error codes, which say far more
-			// than an HTTP status: 21210 is an unowned caller ID, 21219 an
+			// than an HTTP status: 21210 is an unowned caller ID, 573002 an
 			// unverified destination on a trial account.
 			const err = error as { status?: number; code?: number; message?: string };
 			const detail = err.code ? ` [Twilio ${err.code}]` : "";
@@ -165,6 +181,49 @@ export class TwilioVoiceProvider implements VoiceProvider {
 				status,
 				status === 429 || status >= 500,
 			);
+		}
+	}
+
+	/**
+	 * Polls a call's current state.
+	 *
+	 * Needed because trial accounts cannot register a status callback, so no
+	 * webhook ever arrives and a call would otherwise sit at QUEUED forever.
+	 */
+	async fetchCall(providerCallId: string): Promise<VoiceWebhookEvent | null> {
+		try {
+			const call = await this.client.calls(providerCallId).fetch();
+			const status = mapStatus(call.status);
+			const occurredAt = new Date();
+
+			const TERMINAL: VoiceCallStatus[] = [
+				"COMPLETED",
+				"FAILED",
+				"BUSY",
+				"NO_ANSWER",
+				"CANCELED",
+			];
+
+			if (!TERMINAL.includes(status)) {
+				return { kind: "STATUS", providerCallId, status, occurredAt };
+			}
+
+			const answeredBy = (call as { answeredBy?: string }).answeredBy;
+
+			return {
+				kind: "ENDED",
+				providerCallId,
+				status: answeredBy?.startsWith("machine") ? "VOICEMAIL" : status,
+				endedReason: answeredBy ?? call.status ?? null,
+				durationSeconds: Number(call.duration ?? 0),
+				recordingUrl: null,
+				transcriptText: null,
+				turns: [],
+				providerCostUsd: call.price ? Math.abs(Number(call.price)) : null,
+				occurredAt,
+			};
+		} catch {
+			return null;
 		}
 	}
 

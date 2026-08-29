@@ -19,7 +19,8 @@
 		"db:studio": "drizzle-kit studio",
 		"db:migrate": "drizzle-kit migrate",
 		"check-types": "tsc --noEmit",
-		"db:check": "bun run test/connection.check.ts"
+		"db:check": "bun run test/connection.check.ts",
+		"db:tables": "bun run test/tables.check.ts"
 	},
 	"dependencies": {
 		"@doki/env": "workspace:*",

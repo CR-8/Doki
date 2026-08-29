@@ -48,7 +48,7 @@ export const audioPublisher: AudioPublisher = {
 			)
 			.limit(1);
 
-		if (cached) return { url: audioUrl(cached.id) };
+		if (cached) return { url: audioUrl(cached.id), id: cached.id };
 
 		const result = await tts.synthesize({ text: trimmed, language, speaker });
 		const expiresAt = new Date(Date.now() + TTL_DAYS * 24 * 3600 * 1000);
@@ -94,6 +94,6 @@ export const audioPublisher: AudioPublisher = {
 			})
 			.onConflictDoNothing();
 
-		return { url: audioUrl(created.id) };
+		return { url: audioUrl(created.id), id: created.id };
 	},
 };

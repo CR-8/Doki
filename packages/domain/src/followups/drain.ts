@@ -2,13 +2,23 @@ import { runnerHeartbeat } from "@doki/db/schema";
 import { and, eq, lte } from "drizzle-orm";
 
 import type { VoiceDispatcher } from "../calls/dispatch";
+import {
+	type PollableVoiceProvider,
+	reconcileActiveCalls,
+} from "../calls/reconcile";
 import { type RunnerResult, runDueFollowUps } from "./runner";
 import { reclaimStalled } from "./schedule";
 
 export const FOLLOW_UP_RUNNER = "follow-ups";
 
 export type DrainOutcome =
-	| { ran: true; result: RunnerResult; reclaimed: number }
+	| {
+			ran: true;
+			result: RunnerResult;
+			reclaimed: number;
+			/** In-flight calls refreshed by polling, for providers without webhooks. */
+			reconciled: number;
+	  }
 	| { ran: false; reason: "TOO_SOON"; nextEligibleAt: Date }
 	| { ran: false; reason: "BUSY" };
 
@@ -130,6 +140,13 @@ export async function drainFollowUps(
 
 	const reclaimed = await reclaimStalled(db).catch(() => 0);
 
+	// Trial Twilio accounts cannot register a status callback, so no webhook
+	// ever arrives. Polling here keeps those calls from sitting at QUEUED.
+	const reconcile = await reconcileActiveCalls(
+		db,
+		voice as unknown as PollableVoiceProvider,
+	).catch(() => ({ checked: 0, updated: 0, ended: 0 }));
+
 	const runnerId = `${input.triggeredBy}-${Date.now().toString(36)}`;
 	const result = await runDueFollowUps(db, voice, {
 		runnerId,
@@ -149,5 +166,5 @@ export async function drainFollowUps(
 		})
 		.where(eq(runnerHeartbeat.name, FOLLOW_UP_RUNNER));
 
-	return { ran: true, result, reclaimed };
+	return { ran: true, result, reclaimed, reconciled: reconcile.updated };
 }

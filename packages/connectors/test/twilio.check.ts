@@ -4,7 +4,10 @@ import { TwilioVoiceProvider } from "../src/voice/twilio";
 
 /** Signature and parsing cases never place a call, so this is never invoked. */
 const stubAudio = {
-	publish: async () => ({ url: "https://app.example/api/audio/stub.mp3" }),
+	publish: async () => ({
+		url: "https://app.example/api/audio/stub.mp3",
+		id: "00000000-0000-4000-8000-000000000000",
+	}),
 };
 
 let pass = 0;
