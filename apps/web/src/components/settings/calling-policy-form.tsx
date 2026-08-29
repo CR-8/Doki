@@ -184,12 +184,12 @@ export function CallingPolicyForm() {
 					</Row>
 					<Row
 						label="Minimum gap between attempts (minutes)"
-						hint="Minimum 30 minutes."
+						hint="0 allows an immediate re-dial, which is useful while testing."
 					>
 						<Input
 							name="minMinutesBetweenAttempts"
 							type="number"
-							min={30}
+							min={0}
 							max={10080}
 							defaultValue={data.minMinutesBetweenAttempts}
 							required

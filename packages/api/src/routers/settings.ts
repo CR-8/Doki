@@ -54,10 +54,17 @@ export const settingsRouter = {
 					.enum(["PROMOTIONAL", "TRANSACTIONAL", "SERVICE"])
 					.optional(),
 				maxAttemptsPerLead: z.number().int().min(1).max(10).optional(),
+				/**
+				 * Zero is permitted: it makes a lead immediately re-dialable,
+				 * which is what testing the pipeline needs. The floor used to be
+				 * 30 minutes to stop a campaign calling the same person back to
+				 * back — worth restoring as a production default before this is
+				 * put in front of a customer.
+				 */
 				minMinutesBetweenAttempts: z
 					.number()
 					.int()
-					.min(30)
+					.min(0)
 					.max(10080)
 					.optional(),
 				optOutFreezeDays: z.number().int().min(90).max(3650).optional(),
