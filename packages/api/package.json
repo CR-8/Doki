@@ -10,7 +10,8 @@
 		}
 	},
 	"scripts": {
-		"check-types": "tsc --noEmit"
+		"check-types": "tsc --noEmit",
+		"verify": "bun run test/telephony.check.ts"
 	},
 	"dependencies": {
 		"@doki/auth": "workspace:*",

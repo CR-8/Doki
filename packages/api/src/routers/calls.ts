@@ -4,7 +4,7 @@ import {
 	callAnalysisSchema,
 	getLlmProvider,
 } from "@doki/connectors/llm/index";
-import { getVoiceProvider } from "@doki/connectors/voice/index";
+import type { VoiceProvider } from "@doki/connectors/voice/index";
 import {
 	agent as agentTable,
 	callAnalysis,
@@ -20,6 +20,7 @@ import { z } from "zod";
 import { tenantProcedure } from "../index";
 import { audioPublisher } from "../lib/audio-publisher";
 import { invalidateDashboard } from "../lib/cache";
+import { resolveVoiceForOrg } from "../lib/telephony";
 
 export const callsRouter = {
 	list: tenantProcedure
@@ -182,9 +183,15 @@ export const callsRouter = {
 		.handler(async ({ context, input }) => {
 			const { db, organizationId, user } = context;
 
-			let voice: ReturnType<typeof getVoiceProvider>;
+			// Dial from the workspace's own account when it has one — the customer
+			// owns the number and the DLT registration, so the bill and the caller
+			// ID have to be theirs too.
+			let voice: VoiceProvider;
 			try {
-				voice = getVoiceProvider({ audio: audioPublisher });
+				const resolved = await resolveVoiceForOrg(db, organizationId, {
+					audio: audioPublisher,
+				});
+				voice = resolved.voice;
 			} catch (error) {
 				throw new ORPCError("PRECONDITION_FAILED", {
 					message:

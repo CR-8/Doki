@@ -41,10 +41,7 @@ try {
 			.update(leadTable)
 			.set({ name: "Rollback Probe", company: "Probe Co", status: "CONTACTED" })
 			.where(
-				and(
-					eq(leadTable.organizationId, org.id),
-					eq(leadTable.id, target.id),
-				),
+				and(eq(leadTable.organizationId, org.id), eq(leadTable.id, target.id)),
 			)
 			.returning();
 		console.log(

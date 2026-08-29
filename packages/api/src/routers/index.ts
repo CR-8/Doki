@@ -3,10 +3,12 @@ import type { RouterClient } from "@orpc/server";
 import { protectedProcedure, publicProcedure } from "../index";
 import { agentsRouter } from "./agents";
 import { callsRouter } from "./calls";
+import { complianceRouter } from "./compliance";
 import { dashboardRouter } from "./dashboard";
 import { followUpsRouter } from "./followups";
 import { leadsRouter } from "./leads";
 import { settingsRouter } from "./settings";
+import { telephonyRouter } from "./telephony";
 
 export const appRouter = {
 	healthCheck: publicProcedure.handler(() => {
@@ -21,9 +23,11 @@ export const appRouter = {
 	leads: leadsRouter,
 	agents: agentsRouter,
 	calls: callsRouter,
+	compliance: complianceRouter,
 	dashboard: dashboardRouter,
 	followUps: followUpsRouter,
 	settings: settingsRouter,
+	telephony: telephonyRouter,
 };
 
 export type AppRouter = typeof appRouter;

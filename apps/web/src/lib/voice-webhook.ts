@@ -1,11 +1,15 @@
 import { audioPublisher } from "@doki/api/lib/audio-publisher";
+import { resolveVoiceByAccountSid } from "@doki/api/lib/telephony";
 import {
 	buildAnalysisSystemPrompt,
 	buildAnalysisUserPrompt,
 	callAnalysisSchema,
 	getLlmProvider,
 } from "@doki/connectors/llm/index";
-import { getVoiceProvider } from "@doki/connectors/voice/index";
+import {
+	getVoiceProvider,
+	type VoiceProvider,
+} from "@doki/connectors/voice/index";
 import { db } from "@doki/db";
 import { analyzeCall, ingestVoiceEvent } from "@doki/domain";
 import { waitUntil } from "@vercel/functions";
@@ -79,15 +83,32 @@ export async function handleVoiceWebhook(
 		headers[key.toLowerCase()] = value;
 	});
 
-	let voice: ReturnType<typeof getVoiceProvider>;
-	try {
-		voice = getVoiceProvider({ audio: audioPublisher });
-	} catch (error) {
-		console.error("[webhook] provider not configured", error);
-		return Response.json(
-			{ error: "Voice provider not configured" },
-			{ status: 500 },
-		);
+	// Attribute the callback to a workspace before verifying it.
+	//
+	// Workspaces dial from their own Twilio accounts, so the token this
+	// signature must be checked against depends on which account sent it. The
+	// claimed SID is used only to *select* a key — a forged one simply fails
+	// the signature check below.
+	let voice: VoiceProvider | null = null;
+	if (expectedProvider === "twilio") {
+		const accountSid = new URLSearchParams(rawBody).get("AccountSid");
+		if (accountSid) {
+			voice = await resolveVoiceByAccountSid(db, accountSid, {
+				audio: audioPublisher,
+			}).catch(() => null);
+		}
+	}
+
+	if (!voice) {
+		try {
+			voice = getVoiceProvider({ audio: audioPublisher });
+		} catch (error) {
+			console.error("[webhook] provider not configured", error);
+			return Response.json(
+				{ error: "Voice provider not configured" },
+				{ status: 500 },
+			);
+		}
 	}
 
 	// Guard against a stale endpoint still receiving traffic after a switch.

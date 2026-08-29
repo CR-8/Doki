@@ -6,6 +6,7 @@ export * from "./enums";
 export * from "./followups";
 export * from "./leads";
 export * from "./runner";
+export * from "./telephony";
 export * from "./tenant";
 export * from "./tts";
 export * from "./usage";

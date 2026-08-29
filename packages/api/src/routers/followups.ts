@@ -1,4 +1,4 @@
-import { getVoiceProvider } from "@doki/connectors/voice/index";
+import type { VoiceProvider } from "@doki/connectors/voice/index";
 import {
 	agent as agentTable,
 	followUpAction,
@@ -12,6 +12,7 @@ import { z } from "zod";
 import { tenantProcedure } from "../index";
 import { audioPublisher } from "../lib/audio-publisher";
 import { invalidateDashboard } from "../lib/cache";
+import { resolveVoiceForOrg } from "../lib/telephony";
 
 export const followUpsRouter = {
 	list: tenantProcedure
@@ -103,11 +104,14 @@ export const followUpsRouter = {
 	drain: tenantProcedure
 		.input(z.object({ force: z.boolean().default(false) }))
 		.handler(async ({ context, input }) => {
-			const { db } = context;
+			const { db, organizationId } = context;
 
-			let voice: ReturnType<typeof getVoiceProvider>;
+			let voice: VoiceProvider;
 			try {
-				voice = getVoiceProvider({ audio: audioPublisher });
+				const resolved = await resolveVoiceForOrg(db, organizationId, {
+					audio: audioPublisher,
+				});
+				voice = resolved.voice;
 			} catch {
 				// Nothing to drain into — report quietly rather than erroring in
 				// the background heartbeat.

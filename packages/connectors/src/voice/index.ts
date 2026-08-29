@@ -14,6 +14,26 @@ export { VapiVoiceProvider } from "./vapi";
 let cached: VoiceProvider | null = null;
 
 /**
+ * Explicit provider configuration, as opposed to whatever the environment
+ * happens to hold. This is what per-workspace credentials are expressed in.
+ */
+export type VoiceProviderConfig =
+	| {
+			provider: "twilio";
+			accountSid: string;
+			authToken: string;
+			fromNumber: string;
+			record?: boolean;
+	  }
+	| {
+			provider: "vapi";
+			apiKey: string;
+			webhookSecret?: string;
+			phoneNumberId?: string;
+	  }
+	| { provider: "mock" };
+
+/**
  * Dependencies the app supplies to providers that need them. Kept explicit so
  * the connector layer never reaches into storage or the database itself.
  */
@@ -22,6 +42,51 @@ export type VoiceDeps = {
 	audio?: AudioPublisher;
 };
 
+/**
+ * Builds a provider from an explicit configuration.
+ *
+ * Deliberately uncached: these are per-workspace credentials, and a module-level
+ * cache keyed on nothing would hand the first tenant's Twilio account to every
+ * tenant that called afterwards. Construction is cheap — it opens no
+ * connections — so callers can build one per request without concern.
+ */
+export function createVoiceProvider(
+	config: VoiceProviderConfig,
+	deps: VoiceDeps = {},
+): VoiceProvider {
+	switch (config.provider) {
+		case "twilio":
+			return new TwilioVoiceProvider({
+				accountSid: config.accountSid,
+				authToken: config.authToken,
+				fromNumber: config.fromNumber,
+				appUrl: env.APP_URL,
+				record: config.record ?? true,
+				audio: deps.audio ?? {
+					publish: () => {
+						throw new Error(
+							"No audio publisher configured for the Twilio provider",
+						);
+					},
+				},
+			});
+		case "vapi":
+			return new VapiVoiceProvider({
+				apiKey: config.apiKey,
+				webhookSecret: config.webhookSecret,
+				defaultPhoneNumberId: config.phoneNumberId,
+			});
+		case "mock":
+			return new MockVoiceProvider();
+	}
+}
+
+/**
+ * The environment-configured provider.
+ *
+ * Still the fallback for any workspace that has not connected its own account,
+ * and the only thing available to code with no tenant in hand.
+ */
 export function getVoiceProvider(deps: VoiceDeps = {}): VoiceProvider {
 	if (cached) return cached;
 

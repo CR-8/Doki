@@ -62,6 +62,7 @@ const WORKSPACE: NavItem[] = [
 
 const CONFIGURE: NavItem[] = [
 	{ href: "/agents", label: "Agents", icon: RobotIcon },
+	{ href: "/compliance", label: "Compliance", icon: ShieldCheckIcon },
 	{ href: "/settings", label: "Calling policy", icon: GearIcon },
 ];
 
