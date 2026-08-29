@@ -81,4 +81,42 @@ if (row.fromNumber) {
 	);
 }
 
+// --- subaccounts ------------------------------------------------------------
+//
+// A number missing from the main account is most often sitting on a subaccount.
+// Worth checking before concluding it is not there at all.
+const subsRes = await fetch(
+	"https://api.twilio.com/2010-04-01/Accounts.json?PageSize=50",
+	{ headers },
+);
+const subs =
+	(
+		(await subsRes.json()) as {
+			accounts?: { sid: string; friendly_name: string; status: string }[];
+		}
+	).accounts ?? [];
+
+const others = subs.filter((a) => a.sid !== row.accountSid);
+console.log(`
+subaccounts: ${others.length}`);
+
+for (const sub of others) {
+	const subBase = `https://api.twilio.com/2010-04-01/Accounts/${sub.sid}`;
+	const [n, c] = await Promise.all([
+		fetch(`${subBase}/IncomingPhoneNumbers.json?PageSize=50`, { headers }),
+		fetch(`${subBase}/OutgoingCallerIds.json?PageSize=50`, { headers }),
+	]);
+	const subOwned = n.ok
+		? ((await n.json()) as { incoming_phone_numbers?: { phone_number: string }[] })
+				.incoming_phone_numbers?.map((x) => x.phone_number) ?? []
+		: [];
+	const subCallers = c.ok
+		? ((await c.json()) as { outgoing_caller_ids?: { phone_number: string }[] })
+				.outgoing_caller_ids?.map((x) => x.phone_number) ?? []
+		: [];
+	console.log(
+		`   ${sub.friendly_name} (${sub.sid}, ${sub.status}) owned=[${subOwned.join(", ")}] callerIds=[${subCallers.join(", ")}]`,
+	);
+}
+
 await pgClient.end();
