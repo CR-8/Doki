@@ -5,6 +5,7 @@ export * from "./calls/dispatch";
 export * from "./calls/ingest";
 export * from "./calls/prompt";
 export * from "./calls/reconcile";
+export * from "./calls/script";
 export * from "./followups/drain";
 export * from "./followups/runner";
 export * from "./followups/schedule";

@@ -61,6 +61,17 @@ export const agent = pgTable(
 		/** Spoken after the disclosure. Persona, tone, and the actual pitch. */
 		instructions: text("instructions").notNull(),
 
+		/**
+		 * Word-for-word script for one-way calls.
+		 *
+		 * `instructions` briefs a model that is going to hold a conversation; it
+		 * is not speech. A telephony-only provider has no model in the loop — it
+		 * plays one audio file and hangs up — so without this the callee hears
+		 * the disclosure and nothing else. Authored by the user, optionally
+		 * drafted by the LLM, and spoken verbatim.
+		 */
+		callScript: text("call_script"),
+
 		faqs: jsonb("faqs").$type<AgentFaq[]>().default([]).notNull(),
 
 		guardrails: jsonb("guardrails")

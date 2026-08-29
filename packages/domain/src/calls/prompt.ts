@@ -186,3 +186,39 @@ export function buildSystemPrompt(input: {
 
 	return sections.join("\n\n");
 }
+
+/**
+ * The complete spoken script for a one-way call.
+ *
+ * A telephony-only provider plays one audio file and hangs up — there is no
+ * model in the loop to say anything after the greeting. Without a script the
+ * callee hears the disclosure and a dial tone, which is what makes a demo call
+ * look broken even though every part of the pipeline worked.
+ *
+ * The disclosure always leads. It is a legal requirement, and putting it
+ * anywhere but first would let the pitch land before the person knows they are
+ * talking to a machine.
+ */
+export function buildSpokenScript(input: {
+	agent: Agent;
+	lead: Lead;
+	businessName: string;
+}): string {
+	const { agent, lead, businessName } = input;
+
+	const vars = {
+		business_name: businessName,
+		lead_name: lead.name ?? "",
+		agent_name: agent.name,
+	};
+
+	const disclosure = renderTemplate(agent.aiDisclosure ?? "", vars);
+	if (!disclosure) throw new MissingDisclosureError();
+
+	const body = renderTemplate(agent.callScript ?? "", vars).trim();
+	if (!body) return disclosure;
+
+	// Joined with a space; the synthesiser handles sentence pacing from the
+	// punctuation, and an explicit pause here would be read as a gap.
+	return `${disclosure} ${body}`;
+}

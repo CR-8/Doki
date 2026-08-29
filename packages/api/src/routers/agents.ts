@@ -1,6 +1,7 @@
+import { getLlmProvider } from "@doki/connectors/llm/index";
 import { voicesForModel } from "@doki/connectors/tts/index";
-import { agent as agentTable } from "@doki/db/schema";
-import { recordAudit } from "@doki/domain";
+import { agent as agentTable, organization } from "@doki/db/schema";
+import { buildScriptPrompt, callScriptSchema, recordAudit } from "@doki/domain";
 import { env } from "@doki/env/server";
 import { ORPCError } from "@orpc/server";
 import { and, desc, eq } from "drizzle-orm";
@@ -50,6 +51,72 @@ export const agentsRouter = {
 		};
 	}),
 
+	/**
+	 * Drafts the spoken script for a one-way call.
+	 *
+	 * Returns the draft rather than saving it: this is copy that will be read to
+	 * a real person on a recorded call, so a human approves it before it can be
+	 * dialled. The disclosure is never part of what the model writes — it is
+	 * prepended deterministically, so the legally required sentence cannot be
+	 * reworded or dropped.
+	 */
+	generateScript: tenantProcedure
+		.input(z.object({ id: z.uuid() }))
+		.handler(async ({ context, input }) => {
+			const { db, organizationId } = context;
+
+			const [row] = await db
+				.select()
+				.from(agentTable)
+				.where(
+					and(
+						eq(agentTable.organizationId, organizationId),
+						eq(agentTable.id, input.id),
+					),
+				)
+				.limit(1);
+			if (!row)
+				throw new ORPCError("NOT_FOUND", { message: "Agent not found" });
+
+			let llm: ReturnType<typeof getLlmProvider>;
+			try {
+				llm = getLlmProvider();
+			} catch (error) {
+				throw new ORPCError("PRECONDITION_FAILED", {
+					message:
+						error instanceof Error
+							? error.message
+							: "No LLM configured for this deployment.",
+				});
+			}
+
+			const [org] = await db
+				.select({ name: organization.name })
+				.from(organization)
+				.where(eq(organization.id, organizationId))
+				.limit(1);
+
+			const prompt = buildScriptPrompt({
+				agent: row,
+				businessName: org?.name ?? "our team",
+			});
+
+			const result = await llm.generateStructured({
+				system: prompt.system,
+				messages: [{ role: "user", content: prompt.user }],
+				schema: callScriptSchema,
+				schemaName: "call_script",
+				temperature: 0.7,
+				maxOutputTokens: 600,
+			});
+
+			return {
+				script: result.data.script,
+				rationale: result.data.rationale,
+				model: result.model,
+			};
+		}),
+
 	list: tenantProcedure.handler(async ({ context }) => {
 		const { db, organizationId } = context;
 		return db
@@ -84,6 +151,7 @@ export const agentsRouter = {
 				name: z.string().trim().min(1).max(120),
 				objective: z.string().trim().min(1).max(400),
 				instructions: z.string().trim().min(1).max(6000),
+				callScript: z.string().trim().max(1500).nullish(),
 				aiDisclosure: disclosureSchema,
 				language: z.string().trim().min(2).max(16).default("hi-en"),
 				callPurpose: z
@@ -105,6 +173,7 @@ export const agentsRouter = {
 					name: input.name,
 					objective: input.objective,
 					instructions: input.instructions,
+					callScript: input.callScript ?? null,
 					aiDisclosure: input.aiDisclosure,
 					language: input.language,
 					callPurpose: input.callPurpose,
@@ -134,6 +203,7 @@ export const agentsRouter = {
 				name: z.string().trim().min(1).max(120).optional(),
 				objective: z.string().trim().min(1).max(400).optional(),
 				instructions: z.string().trim().min(1).max(6000).optional(),
+				callScript: z.string().trim().max(1500).nullish(),
 				aiDisclosure: disclosureSchema.optional(),
 				language: z.string().trim().min(2).max(16).optional(),
 				callPurpose: z

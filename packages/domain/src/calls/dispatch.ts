@@ -18,6 +18,7 @@ import {
 } from "../policy/can-call";
 import {
 	buildFirstMessage,
+	buildSpokenScript,
 	buildSystemPrompt,
 	MissingDisclosureError,
 } from "./prompt";
@@ -25,6 +26,12 @@ import {
 /** Minimal surface we need from the voice connector, kept structural to avoid a package cycle. */
 export type VoiceDispatcher = {
 	readonly name: string;
+	/**
+	 * True when the provider plays audio and hangs up rather than holding a
+	 * conversation. Such a call has no model in the loop, so everything the
+	 * callee will ever hear has to be in the first message.
+	 */
+	readonly oneWay?: boolean;
 	placeCall(req: {
 		callId: string;
 		organizationId: string;
@@ -180,7 +187,12 @@ export async function dispatchCall(
 	let firstMessage: string;
 	let systemPrompt: string;
 	try {
-		firstMessage = buildFirstMessage({ agent, lead, businessName });
+		// A conversational provider speaks the greeting and improvises from the
+		// system prompt. A one-way provider gets one utterance, so the whole
+		// script goes in — otherwise the callee hears the disclosure and a click.
+		firstMessage = voice.oneWay
+			? buildSpokenScript({ agent, lead, businessName })
+			: buildFirstMessage({ agent, lead, businessName });
 		systemPrompt = buildSystemPrompt({ agent, lead, businessName });
 	} catch (error) {
 		const message =

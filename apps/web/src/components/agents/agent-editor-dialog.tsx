@@ -23,6 +23,7 @@ import { Textarea } from "@doki/ui/components/textarea";
 import {
 	PlusIcon,
 	ShieldCheckIcon,
+	SparkleIcon,
 	TrashIcon,
 	WarningIcon,
 } from "@phosphor-icons/react";
@@ -68,6 +69,7 @@ export type EditableAgent = {
 	callPurpose: string;
 	maxCallSeconds: number;
 	voiceId: string | null;
+	callScript: string | null;
 	faqs: Faq[];
 	guardrails: Guardrails;
 };
@@ -111,6 +113,7 @@ export function AgentEditorDialog({
 	const [faqs, setFaqs] = useState<Faq[]>([]);
 	const [guardrails, setGuardrails] = useState<Guardrails>(DEFAULT_GUARDRAILS);
 	const [voiceId, setVoiceId] = useState("");
+	const [callScript, setCallScript] = useState("");
 	const queryClient = useQueryClient();
 
 	// The roster belongs to the TTS model, so it is fetched rather than listed
@@ -130,6 +133,7 @@ export function AgentEditorDialog({
 		setFaqs(agent?.faqs ?? []);
 		setGuardrails(agent?.guardrails ?? DEFAULT_GUARDRAILS);
 		setVoiceId(agent?.voiceId ?? "");
+		setCallScript(agent?.callScript ?? "");
 	}, [open, agent]);
 
 	const onDone = (message: string) => {
@@ -149,6 +153,18 @@ export function AgentEditorDialog({
 	const update = useMutation(
 		orpc.agents.update.mutationOptions({
 			onSuccess: () => onDone("Agent updated"),
+			onError: (error) => toast.error(error.message),
+		}),
+	);
+
+	// Drafts the script but does not save it — the copy is read to a real person
+	// on a recorded call, so a human approves it before it can be dialled.
+	const draft = useMutation(
+		orpc.agents.generateScript.mutationOptions({
+			onSuccess: (result) => {
+				setCallScript(result.script);
+				toast.success("Draft ready", { description: result.rationale });
+			},
 			onError: (error) => toast.error(error.message),
 		}),
 	);
@@ -176,6 +192,7 @@ export function AgentEditorDialog({
 			// Empty means "use the workspace default", which the synthesiser
 			// resolves at call time — not a voice literal frozen in here.
 			voiceId: voiceId || null,
+			callScript: callScript.trim() || null,
 			faqs: cleanFaqs,
 			guardrails,
 		};
@@ -339,6 +356,37 @@ export function AgentEditorDialog({
 									"You are calling existing customers about their policy renewal.\nBe warm and brief. Confirm you are speaking to the right person.\nIf interested, offer a callback from a human advisor."
 								}
 							/>
+						</div>
+
+						<div className="grid gap-2">
+							<div className="flex items-center justify-between gap-2">
+								<Label htmlFor="agent-script">Call script</Label>
+								{agent ? (
+									<Button
+										type="button"
+										size="xs"
+										variant="outline"
+										disabled={draft.isPending}
+										onClick={() => draft.mutate({ id: agent.id })}
+									>
+										<SparkleIcon className="size-3.5" />
+										{draft.isPending ? "Drafting..." : "Draft with AI"}
+									</Button>
+								) : null}
+							</div>
+							<Textarea
+								id="agent-script"
+								rows={5}
+								value={callScript}
+								onChange={(e) => setCallScript(e.target.value)}
+								placeholder="आपकी policy का renewal इस महीने due है। हमारी team आपको कल call करके पूरी detail बताएगी।"
+							/>
+							<p className="text-muted-foreground text-xs">
+								Spoken word-for-word after the disclosure. Required for Twilio,
+								which plays one message and hangs up — without a script the
+								callee hears only the greeting. A conversational provider
+								ignores this and improvises from the brief instead.
+							</p>
 						</div>
 
 						{/* ---- FAQs ---------------------------------------------------- */}

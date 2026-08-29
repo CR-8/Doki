@@ -82,6 +82,8 @@ function mapStatus(status: string | undefined | null): VoiceCallStatus {
  */
 export class TwilioVoiceProvider implements VoiceProvider {
 	readonly name = "twilio";
+	/** Plays one audio file and hangs up — no conversation. */
+	readonly oneWay = true;
 	private readonly client: Twilio;
 	/** Cached account-capability probe; null until first resolved. */
 	private trial: boolean | null = null;

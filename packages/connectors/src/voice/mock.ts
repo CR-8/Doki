@@ -16,6 +16,8 @@ import type {
  */
 export class MockVoiceProvider implements VoiceProvider {
 	readonly name = "mock";
+	/** Plays one audio file and hangs up — no conversation. */
+	readonly oneWay = true;
 	readonly placed: PlaceCallRequest[] = [];
 
 	async placeCall(req: PlaceCallRequest): Promise<PlaceCallResult> {
