@@ -50,6 +50,50 @@ export function buildFirstMessage(input: {
 }
 
 /**
+ * How the agent must write, given its configured language.
+ *
+ * This exists for the synthesiser, not for the reader. Bulbul is trained on
+ * Devanagari for Hindi: romanised Hindi ("main bol rahi hoon") gets pronounced
+ * as though it were English and comes out mangled, while the same sentence in
+ * Devanagari ("मैं बोल रही हूँ") is read correctly.
+ *
+ * Code-mixed copy stays deliberately mixed — Hindi in Devanagari, English terms
+ * in Latin — because that is both what Sarvam handles best and how an Indian
+ * salesperson actually speaks. Transliterating "renewal" into Devanagari would
+ * make it worse, not better.
+ */
+export function scriptDirective(language: string): string | null {
+	const lang = language.toLowerCase();
+
+	if (lang.startsWith("hi-en") || lang === "hinglish") {
+		return [
+			"Language and script:",
+			'- Write Hindi words in Devanagari, never romanised. Write "मैं आपसे बात कर रही हूँ", never "main aapse baat kar rahi hoon".',
+			'- Leave words that are normally said in English — product names, "renewal", "policy", "email" — in Latin script.',
+			"- This is read aloud by a speech model that mispronounces romanised Hindi. The script you choose is the difference between sounding Indian and sounding broken.",
+		].join("\n");
+	}
+
+	if (lang.startsWith("hi")) {
+		return [
+			"Language and script:",
+			"- Write entirely in Hindi, in Devanagari. Never romanise Hindi.",
+			"- Proper nouns and product names may stay in Latin script.",
+			"- This is read aloud by a speech model that mispronounces romanised Hindi.",
+		].join("\n");
+	}
+
+	if (lang.startsWith("en")) {
+		return [
+			"Language and script:",
+			"- Write in Indian English. Plain words, no American idiom.",
+		].join("\n");
+	}
+
+	return null;
+}
+
+/**
  * Assembles the live system prompt.
  *
  * Kept deliberately small: stable policy, the objective, a compact lead
@@ -74,10 +118,14 @@ export function buildSystemPrompt(input: {
 			"Conversation rules:",
 			`- Keep every reply under ${guardrails.maxWordsPerTurn} words. You are on a phone call, not writing.`,
 			"- One question at a time. Let the person finish speaking.",
-			"- Speak naturally in the caller's language. Code-mixed Hindi/English is normal and fine.",
 			"- Never repeat the greeting; it has already been spoken.",
 		].join("\n"),
 	);
+
+	// Placed high, before the brief: the model follows a script instruction it
+	// reads early far more reliably than one buried after the FAQs.
+	const script = scriptDirective(agent.language);
+	if (script) sections.push(script);
 
 	// Hard behavioural limits. These are also checked after the call, so a
 	// breach is visible in the analysis even if the model ignored them live.

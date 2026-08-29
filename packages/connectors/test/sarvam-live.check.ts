@@ -22,7 +22,7 @@ const speaker = process.env.SARVAM_TTS_SPEAKER ?? "anushka";
 
 const provider = new SarvamTtsProvider({ apiKey, model, speaker });
 
-const text = "Namaste, main Acme Sales ki AI assistant bol rahi hoon.";
+const text = "नमस्ते, मैं Acme Sales की AI assistant बोल रही हूँ।";
 console.log(`model=${model} speaker=${speaker}`);
 console.log(`text: ${text}`);
 

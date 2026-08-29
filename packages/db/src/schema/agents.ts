@@ -55,7 +55,7 @@ export const agent = pgTable(
 		 * agent whose disclosure is blank.
 		 */
 		aiDisclosure: text("ai_disclosure")
-			.default("Namaste, main {{business_name}} ki AI assistant bol rahi hoon.")
+			.default("नमस्ते, मैं {{business_name}} की AI assistant बोल रही हूँ।")
 			.notNull(),
 
 		/** Spoken after the disclosure. Persona, tone, and the actual pitch. */

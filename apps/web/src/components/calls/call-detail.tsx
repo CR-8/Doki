@@ -396,6 +396,25 @@ export function CallDetail({ callId }: { callId: string }) {
 									{formatInr(call.totalCostInr)}
 								</span>
 							</div>
+
+							{/*
+							 * A zero line means the component did not bill against this
+							 * call, which is not the same as "it did not happen" — say
+							 * which, rather than leaving a bare ₹0 to be misread.
+							 */}
+							{Number(call.ttsCostInr) === 0 ? (
+								<p className="pt-2 text-muted-foreground text-xs">
+									Speech was synthesised once and cached, so its cost is metered
+									at synthesis rather than against each call that replays it.
+								</p>
+							) : null}
+							{Number(call.sttCostInr) === 0 && !call.transcriptText ? (
+								<p className="text-muted-foreground text-xs">
+									Nothing was transcribed on this call, so no speech-to-text was
+									charged.
+								</p>
+							) : null}
+
 							{call.endedReason ? (
 								<p className="pt-2 text-muted-foreground text-xs">
 									Ended: {call.endedReason}

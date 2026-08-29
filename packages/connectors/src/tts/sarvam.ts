@@ -13,9 +13,14 @@ type SarvamConfig = {
 	baseUrl?: string;
 };
 
-/** Per-request text ceiling, by model. Longer copy is synthesised in chunks. */
+/**
+ * Per-request text ceiling, by model.
+ *
+ * These are the limits of the streaming endpoint, which allows more per request
+ * than the JSON one (3500 vs 2500) — so most copy now goes in a single call.
+ */
 const MAX_CHARS: Record<string, number> = {
-	"bulbul:v3": 2500,
+	"bulbul:v3": 3500,
 	"bulbul:v2": 1500,
 };
 
@@ -139,7 +144,14 @@ export class SarvamTtsProvider implements TtsProvider {
 		speaker: string,
 		sampleRate?: number,
 	): Promise<Buffer> {
-		const res = await fetch(`${this.baseUrl}/text-to-speech`, {
+		// The streaming endpoint rather than the JSON one.
+		//
+		// It returns raw audio instead of base64 inside JSON, which removes the
+		// ~33% encoding overhead and a decode step, accepts 3500 characters
+		// instead of 2500, and starts sending bytes before synthesis finishes.
+		// The call still resolves to a complete buffer here — Twilio fetches a
+		// finished URL with <Play>, so there is nothing downstream to stream to.
+		const res = await fetch(`${this.baseUrl}/text-to-speech/stream`, {
 			method: "POST",
 			headers: {
 				"content-type": "application/json",
@@ -153,6 +165,9 @@ export class SarvamTtsProvider implements TtsProvider {
 				speech_sample_rate: sampleRate ?? 22050,
 				// MP3 is the format Twilio <Play> handles most reliably.
 				output_audio_codec: "mp3",
+				// Normalises English words and digits before synthesis, which is
+				// what stops code-mixed copy being read letter by letter.
+				enable_preprocessing: true,
 			}),
 		});
 
@@ -165,12 +180,14 @@ export class SarvamTtsProvider implements TtsProvider {
 			);
 		}
 
-		const payload = (await res.json()) as { audios?: string[] };
-		const encoded = payload.audios?.[0];
-		if (!encoded) {
+		// Raw audio, not JSON. Reading it as a buffer is the whole point of this
+		// endpoint — there is no base64 envelope to decode.
+		const audio = Buffer.from(await res.arrayBuffer());
+
+		if (audio.byteLength === 0) {
 			throw new TtsProviderError("Sarvam returned no audio", res.status, true);
 		}
 
-		return Buffer.from(encoded, "base64");
+		return audio;
 	}
 }

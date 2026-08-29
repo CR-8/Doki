@@ -45,7 +45,7 @@ const PURPOSES = [
 ];
 
 export const DEFAULT_DISCLOSURE =
-	"Namaste, main {{business_name}} ki AI assistant bol rahi hoon.";
+	"नमस्ते, मैं {{business_name}} की AI assistant बोल रही हूँ।";
 
 type Faq = { question: string; answer: string };
 

@@ -64,6 +64,14 @@ const TERMINAL = new Set([
 export function estimateCallCost(input: {
 	durationSeconds: number;
 	assistantCharacters: number;
+	/**
+	 * Whether speech-to-text actually ran.
+	 *
+	 * Not every call is a conversation. The telephony-only path plays a
+	 * synthesised message and hangs up — nothing is transcribed, so charging
+	 * per-minute STT against it invents a cost the customer never incurred.
+	 */
+	transcribed?: boolean;
 }): {
 	telephony: number;
 	stt: number;
@@ -75,7 +83,7 @@ export function estimateCallCost(input: {
 	const minutes = input.durationSeconds / 60;
 
 	const telephony = minutes * env.COST_TELEPHONY_INR_PER_MIN;
-	const stt = minutes * env.COST_STT_INR_PER_MIN;
+	const stt = input.transcribed ? minutes * env.COST_STT_INR_PER_MIN : 0;
 	const tts =
 		(input.assistantCharacters / 10_000) * env.COST_TTS_INR_PER_10K_CHARS;
 	// Rough token proxy: ~4 characters per token, and roughly as much prompt
@@ -183,6 +191,9 @@ export async function ingestVoiceEvent(
 	const cost = estimateCallCost({
 		durationSeconds: billableSeconds,
 		assistantCharacters,
+		// Evidence that audio was actually run through recognition, rather than
+		// an assumption that every call is a conversation.
+		transcribed: event.turns.length > 0 || Boolean(event.transcriptText),
 	});
 
 	await db.transaction(async (tx: typeof db) => {
