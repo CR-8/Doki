@@ -35,6 +35,8 @@ export type AudioPublisher = {
 		text: string;
 		language: string;
 		organizationId: string;
+		/** Agent's chosen voice. Falls back to the deployment default. */
+		voice?: string;
 	}): Promise<{ url: string; id: string }>;
 };
 
@@ -117,6 +119,9 @@ export class TwilioVoiceProvider implements VoiceProvider {
 			text: req.firstMessage,
 			language: req.language,
 			organizationId: req.organizationId,
+			// Carries the agent's voice. Without this every agent in the
+			// workspace would speak in the one voice set on the deployment.
+			voice: req.voiceId,
 		});
 
 		const trial = await this.isTrialAccount();

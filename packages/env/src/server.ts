@@ -47,9 +47,9 @@ export const env = createEnv({
 		// ---- Speech (Indic) --------------------------------------------------
 		SARVAM_API_KEY: z.string().optional(),
 		SARVAM_STT_MODEL: z.string().default("saarika:v2"),
-		SARVAM_TTS_MODEL: z.string().default("bulbul:v2"),
+		SARVAM_TTS_MODEL: z.string().default("bulbul:v3"),
 		/** Bulbul voice id. v2: anushka, manisha, vidya, arya, abhilash, karun, hitesh. */
-		SARVAM_TTS_SPEAKER: z.string().default("anushka"),
+		SARVAM_TTS_SPEAKER: z.string().default("priya"),
 
 		// ---- Cost model (INR) ------------------------------------------------
 		// Drives usage metering. Keep these in config, never hardcoded in logic,

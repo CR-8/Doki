@@ -5,6 +5,7 @@ import type { TtsProvider } from "./types";
 
 export { chunkText, SarvamTtsProvider, toSarvamLanguage } from "./sarvam";
 export * from "./types";
+export * from "./voices";
 
 let cached: TtsProvider | null = null;
 

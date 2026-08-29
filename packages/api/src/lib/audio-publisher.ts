@@ -28,11 +28,13 @@ function audioUrl(id: string): string {
  * biggest cost lever available here.
  */
 export const audioPublisher: AudioPublisher = {
-	async publish({ text, language, organizationId }) {
+	async publish({ text, language, organizationId, voice }) {
 		const tts = getTtsProvider();
 		const trimmed = text.trim();
 
-		const speaker = env.SARVAM_TTS_SPEAKER;
+		// The agent's voice when it has one. It is part of the cache key below,
+		// so two agents saying the same words in different voices do not collide.
+		const speaker = voice?.trim() || env.SARVAM_TTS_SPEAKER;
 		const model = env.SARVAM_TTS_MODEL;
 		const contentHash = hashContent([trimmed, language, speaker, model]);
 

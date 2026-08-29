@@ -26,7 +26,7 @@ import {
 	TrashIcon,
 	WarningIcon,
 } from "@phosphor-icons/react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -67,6 +67,7 @@ export type EditableAgent = {
 	language: string;
 	callPurpose: string;
 	maxCallSeconds: number;
+	voiceId: string | null;
 	faqs: Faq[];
 	guardrails: Guardrails;
 };
@@ -109,7 +110,17 @@ export function AgentEditorDialog({
 	const [purpose, setPurpose] = useState("SERVICE");
 	const [faqs, setFaqs] = useState<Faq[]>([]);
 	const [guardrails, setGuardrails] = useState<Guardrails>(DEFAULT_GUARDRAILS);
+	const [voiceId, setVoiceId] = useState("");
 	const queryClient = useQueryClient();
+
+	// The roster belongs to the TTS model, so it is fetched rather than listed
+	// here — see the comment on the `voices` procedure.
+	const catalogue = useQuery({
+		...orpc.agents.voices.queryOptions(),
+		enabled: open,
+	});
+	const voices = catalogue.data?.voices ?? [];
+	const defaultVoice = catalogue.data?.defaultVoice ?? "";
 
 	// Reset on every open so a stale draft never leaks into the next agent.
 	useEffect(() => {
@@ -118,6 +129,7 @@ export function AgentEditorDialog({
 		setPurpose(agent?.callPurpose ?? "SERVICE");
 		setFaqs(agent?.faqs ?? []);
 		setGuardrails(agent?.guardrails ?? DEFAULT_GUARDRAILS);
+		setVoiceId(agent?.voiceId ?? "");
 	}, [open, agent]);
 
 	const onDone = (message: string) => {
@@ -161,6 +173,9 @@ export function AgentEditorDialog({
 			language,
 			callPurpose: purpose as "SERVICE",
 			maxCallSeconds: Number(form.get("maxCallSeconds") ?? 300),
+			// Empty means "use the workspace default", which the synthesiser
+			// resolves at call time — not a voice literal frozen in here.
+			voiceId: voiceId || null,
 			faqs: cleanFaqs,
 			guardrails,
 		};
@@ -243,6 +258,41 @@ export function AgentEditorDialog({
 									</SelectContent>
 								</Select>
 							</div>
+						</div>
+
+						<div className="grid gap-2">
+							<Label>Voice</Label>
+							<Select
+								value={voiceId}
+								onValueChange={(v) => setVoiceId(v ?? "")}
+								disabled={voices.length === 0}
+							>
+								<SelectTrigger>
+									<SelectValue
+										placeholder={
+											catalogue.isPending
+												? "Loading voices..."
+												: `Workspace default (${defaultVoice})`
+										}
+									/>
+								</SelectTrigger>
+								<SelectContent>
+									{voices.map((voice) => (
+										<SelectItem key={voice.id} value={voice.id}>
+											{voice.label}
+											<span className="text-muted-foreground">
+												{voice.gender}
+											</span>
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+							<p className="text-muted-foreground text-xs">
+								{voiceId
+									? "Used for every call this agent places."
+									: `Leave unset to use the workspace default (${defaultVoice || "none configured"}).`}
+								{catalogue.data ? ` Voices for ${catalogue.data.model}.` : ""}
+							</p>
 						</div>
 
 						<div className="grid gap-2 rounded-md border border-border bg-muted/40 p-3">

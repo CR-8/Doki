@@ -97,8 +97,8 @@ export class SarvamTtsProvider implements TtsProvider {
 
 	constructor(private readonly config: SarvamConfig) {
 		this.baseUrl = config.baseUrl ?? "https://api.sarvam.ai";
-		this.model = config.model ?? "bulbul:v2";
-		this.speaker = config.speaker ?? "anushka";
+		this.model = config.model ?? "bulbul:v3";
+		this.speaker = config.speaker ?? "priya";
 	}
 
 	async synthesize(req: TtsRequest): Promise<TtsResult> {

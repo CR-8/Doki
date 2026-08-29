@@ -1,5 +1,7 @@
+import { voicesForModel } from "@doki/connectors/tts/index";
 import { agent as agentTable } from "@doki/db/schema";
 import { recordAudit } from "@doki/domain";
+import { env } from "@doki/env/server";
 import { ORPCError } from "@orpc/server";
 import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
@@ -31,6 +33,23 @@ const disclosureSchema = z
 	.max(300);
 
 export const agentsRouter = {
+	/**
+	 * Voices an agent can be given.
+	 *
+	 * Served from the connector rather than hard-coded in the console, so the
+	 * list tracks whatever model the deployment is configured for. Sarvam
+	 * retired every bulbul:v2 speaker when v3 landed; a list duplicated in a
+	 * form would have kept offering names the API no longer accepts.
+	 */
+	voices: tenantProcedure.handler(() => {
+		const model = env.SARVAM_TTS_MODEL;
+		return {
+			model,
+			defaultVoice: env.SARVAM_TTS_SPEAKER,
+			voices: voicesForModel(model),
+		};
+	}),
+
 	list: tenantProcedure.handler(async ({ context }) => {
 		const { db, organizationId } = context;
 		return db
