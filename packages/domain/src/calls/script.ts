@@ -18,7 +18,15 @@ export const callScriptSchema = z.object({
 		.string()
 		.trim()
 		.min(20, "Too short to be a usable call script")
-		.max(1200),
+		.max(1200)
+		// Enforced rather than merely requested. Models keep writing questions
+		// into one-way scripts because that is what a sales call sounds like in
+		// their training data — but nobody is listening for an answer, and a
+		// question followed by a hangup is worse than saying nothing.
+		.refine(
+			(text) => !text.includes("?"),
+			"A one-way call cannot ask questions — the call ends as soon as the script finishes. State what happens next instead.",
+		),
 	/** One line on the approach taken, shown to the user before they accept it. */
 	rationale: z.string().trim().max(300),
 });
@@ -36,8 +44,13 @@ const SYSTEM = [
 	"- 30 to 70 words. A recorded call longer than about 25 seconds gets hung up on.",
 	"- Do NOT greet or introduce yourself. A disclosure has already been spoken;",
 	"  your text continues directly from it.",
-	"- Say who is calling and why, give the one useful piece of information, and",
-	"  state exactly what happens next.",
+	"- NEVER ask a question. Nobody can answer — the call ends the instant you",
+	"  stop speaking. Do not say 'would you like', 'can you confirm', or anything",
+	"  expecting a reply. Make statements only.",
+	"- Say why you are calling, give the one useful piece of information, and end",
+	"  by stating what happens next — normally that a colleague will call back.",
+	"- Address the person with {{lead_name}} where it reads naturally. It is",
+	"  substituted before the call; write the placeholder exactly.",
 	"- Never quote prices, discounts, or contract terms.",
 	"- Never promise anything not given to you in the brief.",
 	"- Plain spoken sentences. No bullet points, no markdown, no stage directions,",
