@@ -11,7 +11,8 @@
 	},
 	"scripts": {
 		"check-types": "tsc --noEmit",
-		"verify": "bun run test/telephony.check.ts"
+		"verify": "bun run test/telephony.check.ts",
+		"verify:twilio": "bun run test/twilio-live.check.ts"
 	},
 	"dependencies": {
 		"@doki/auth": "workspace:*",

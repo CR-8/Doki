@@ -28,8 +28,16 @@ type TwilioAccount = {
 	/** Set when Twilio answered but refused; null when it could not be reached. */
 	error: string | null;
 	isTrial: boolean | null;
+	/** Numbers the account owns. */
 	numbers: string[];
+	/** Outside numbers verified for outbound caller ID. Also valid as `From`. */
+	callerIds: string[];
 };
+
+/** Every number Twilio will accept as a `From` on this account. */
+function callableFrom(account: TwilioAccount): string[] {
+	return [...new Set([...account.numbers, ...account.callerIds])];
+}
 
 /**
  * Asks Twilio what this account is and which numbers it owns.
@@ -55,7 +63,13 @@ async function describeTwilioAccount(
 		);
 	} catch {
 		// Could not reach Twilio at all — distinct from Twilio saying no.
-		return { reachable: false, error: null, isTrial: null, numbers: [] };
+		return {
+			reachable: false,
+			error: null,
+			isTrial: null,
+			numbers: [],
+			callerIds: [],
+		};
 	}
 
 	if (accountRes.status === 401) {
@@ -64,6 +78,7 @@ async function describeTwilioAccount(
 			error: "Twilio rejected these credentials.",
 			isTrial: null,
 			numbers: [],
+			callerIds: [],
 		};
 	}
 	if (!accountRes.ok) {
@@ -72,16 +87,26 @@ async function describeTwilioAccount(
 			error: `Twilio returned ${accountRes.status} for the account lookup.`,
 			isTrial: null,
 			numbers: [],
+			callerIds: [],
 		};
 	}
 
 	const account = (await accountRes.json()) as { type?: string };
 	const isTrial = account.type === "Trial";
 
-	const numbersRes = await fetch(
-		`https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(accountSid)}/IncomingPhoneNumbers.json?PageSize=50`,
-		{ headers },
-	);
+	// Both lists matter: Twilio accepts a `From` that is either a number the
+	// account owns or an outside number verified as an outgoing caller ID.
+	// Checking only the first rejects a perfectly valid configuration.
+	const [numbersRes, callerIdRes] = await Promise.all([
+		fetch(
+			`https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(accountSid)}/IncomingPhoneNumbers.json?PageSize=50`,
+			{ headers },
+		),
+		fetch(
+			`https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(accountSid)}/OutgoingCallerIds.json?PageSize=50`,
+			{ headers },
+		),
+	]);
 
 	const numbers: string[] = numbersRes.ok
 		? ((
@@ -91,7 +116,15 @@ async function describeTwilioAccount(
 			).incoming_phone_numbers?.map((n) => n.phone_number) ?? [])
 		: [];
 
-	return { reachable: true, error: null, isTrial, numbers };
+	const callerIds: string[] = callerIdRes.ok
+		? ((
+				(await callerIdRes.json()) as {
+					outgoing_caller_ids?: { phone_number: string }[];
+				}
+			).outgoing_caller_ids?.map((n) => n.phone_number) ?? [])
+		: [];
+
+	return { reachable: true, error: null, isTrial, numbers, callerIds };
 }
 
 /**
@@ -125,41 +158,47 @@ async function probeTwilio(
 		};
 	}
 
-	if (account.numbers.length === 0) {
+	const usable = callableFrom(account);
+
+	if (usable.length === 0) {
 		return {
 			ok: false,
 			message:
-				"These credentials work, but the account owns no phone numbers. Buy one before calling.",
+				"These credentials work, but the account has no number to call from. Buy a Twilio number or verify an outgoing caller ID.",
 			isTrial: account.isTrial,
-			numbers: account.numbers,
+			numbers: usable,
 		};
 	}
 
 	if (!fromNumber) {
 		return {
 			ok: false,
-			message: `No calling number chosen. This account owns ${account.numbers.join(", ")}.`,
+			message: `No calling number chosen. This account can call from ${usable.join(", ")}.`,
 			isTrial: account.isTrial,
-			numbers: account.numbers,
+			numbers: usable,
 		};
 	}
 
-	if (!account.numbers.includes(fromNumber)) {
+	if (!usable.includes(fromNumber)) {
 		return {
 			ok: false,
-			message: `${fromNumber} is not owned by this account. Owned: ${account.numbers.join(", ")}`,
+			message: `Twilio does not list ${fromNumber} on this account. It can call from ${usable.join(", ")}. If you own it on another account or subaccount, use those credentials instead.`,
 			isTrial: account.isTrial,
-			numbers: account.numbers,
+			numbers: usable,
 		};
 	}
+
+	const viaCallerId =
+		!account.numbers.includes(fromNumber) &&
+		account.callerIds.includes(fromNumber);
 
 	return {
 		ok: true,
 		message: account.isTrial
-			? "Connected. This is a trial account, so calls run with a reduced parameter set and can only reach numbers you have verified with Twilio."
-			: "Connected.",
+			? `Connected${viaCallerId ? " using a verified caller ID" : ""}. This is a trial account, so calls run with a reduced parameter set and can only reach numbers you have verified with Twilio.`
+			: `Connected${viaCallerId ? " using a verified caller ID" : ""}.`,
 		isTrial: account.isTrial,
-		numbers: account.numbers,
+		numbers: usable,
 	};
 }
 
@@ -265,10 +304,15 @@ export const telephonyRouter = {
 				});
 			}
 
-			// Check ownership before storing, so the mistake is caught where it is
-			// made rather than on a later Test click. Only when Twilio actually
-			// answers: an unreachable API must not block saving valid config.
-			if (input.provider === "twilio" && fromNumber) {
+			// Flag a from-number Twilio does not recognise, but never refuse the
+			// save over it. This check cannot see every legitimate case — a
+			// subaccount, a caller ID verified seconds ago, a number ported
+			// mid-transfer — and a remote lookup that is merely incomplete has no
+			// business standing between someone and their own configuration.
+			// Saving records intent; Test connection is what establishes truth.
+			let warning: string | null = null;
+
+			if (input.provider === "twilio" && fromNumber && input.accountSid) {
 				const [stored] = await db
 					.select({ enc: organizationTelephony.authTokenEncrypted })
 					.from(organizationTelephony)
@@ -276,17 +320,16 @@ export const telephonyRouter = {
 					.limit(1);
 
 				const token = input.authToken ?? decryptSecret(stored?.enc ?? null);
-				if (token && input.accountSid) {
+				if (token) {
 					const account = await describeTwilioAccount(input.accountSid, token);
+					const usable = callableFrom(account);
 					if (
 						account.reachable &&
 						!account.error &&
-						account.numbers.length > 0 &&
-						!account.numbers.includes(fromNumber)
+						usable.length > 0 &&
+						!usable.includes(fromNumber)
 					) {
-						throw new ORPCError("BAD_REQUEST", {
-							message: `${fromNumber} is not owned by this Twilio account. Owned: ${account.numbers.join(", ")}`,
-						});
+						warning = `Saved, but Twilio does not list ${fromNumber} on this account. It reports ${usable.join(", ")}. Calls will fail until this is resolved.`;
 					}
 				}
 			}
@@ -326,6 +369,13 @@ export const telephonyRouter = {
 					record: organizationTelephony.record,
 				});
 
+			if (warning) {
+				await db
+					.update(organizationTelephony)
+					.set({ lastError: warning })
+					.where(eq(organizationTelephony.organizationId, organizationId));
+			}
+
 			await recordAudit(db, {
 				organizationId,
 				actor: { type: "USER", id: user.id },
@@ -340,7 +390,7 @@ export const telephonyRouter = {
 				},
 			});
 
-			return saved;
+			return { ...saved, warning };
 		}),
 
 	/**
@@ -448,13 +498,21 @@ export const telephonyRouter = {
 			.limit(1);
 
 		if (row?.provider !== "twilio" || !row.accountSid) {
-			return { numbers: [] as string[], isTrial: null, problem: null };
+			return {
+				numbers: [] as string[],
+				owned: [] as string[],
+				callerIds: [] as string[],
+				isTrial: null,
+				problem: null,
+			};
 		}
 
 		const secret = decryptSecret(row.authTokenEncrypted);
 		if (!secret) {
 			return {
 				numbers: [] as string[],
+				owned: [] as string[],
+				callerIds: [] as string[],
 				isTrial: null,
 				problem: "Stored credentials could not be read.",
 			};
@@ -463,7 +521,9 @@ export const telephonyRouter = {
 		const account = await describeTwilioAccount(row.accountSid, secret);
 
 		return {
-			numbers: account.numbers,
+			numbers: callableFrom(account),
+			owned: account.numbers,
+			callerIds: account.callerIds,
 			isTrial: account.isTrial,
 			problem: account.reachable
 				? account.error

@@ -27,7 +27,7 @@ import {
 	WarningIcon,
 } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { orpc } from "@/utils/orpc";
@@ -85,7 +85,20 @@ export function TelephonyForm() {
 		...orpc.telephony.numbers.queryOptions(),
 		enabled: Boolean(config) && provider === "twilio",
 	});
-	const numbers = owned.data?.numbers ?? [];
+	// Both kinds are valid as a `From`, and saying which is which is the
+	// difference between "that number is wrong" and "verify it with Twilio".
+	// Memoised so the prefill effect below keys off the contents rather than a
+	// fresh array identity on every render.
+	const suggestions = useMemo(() => {
+		const ownedNumbers = owned.data?.owned ?? [];
+		const callerIds = owned.data?.callerIds ?? [];
+		return [
+			...ownedNumbers.map((number) => ({ number, kind: "owned" as const })),
+			...callerIds
+				.filter((number) => !ownedNumbers.includes(number))
+				.map((number) => ({ number, kind: "verified caller ID" as const })),
+		];
+	}, [owned.data?.owned, owned.data?.callerIds]);
 
 	// Sync once from the server, then leave the form alone so a refetch cannot
 	// stamp over something half-typed.
@@ -96,13 +109,14 @@ export function TelephonyForm() {
 		setFromNumber(config.fromNumber ?? "");
 	}, [config, touched]);
 
-	// With exactly one number on the account there is nothing to choose, so
-	// choosing it is the useful thing to do rather than making them retype it.
+	// Prefill only when the field is empty and there is exactly one candidate.
+	// Never overwrite something already saved — that number may be valid in a
+	// way this lookup cannot see.
 	useEffect(() => {
-		if (touched || numbers.length !== 1) return;
-		const only = numbers[0] as string;
-		setFromNumber((current) => (current === only ? current : only));
-	}, [numbers, touched]);
+		if (touched || suggestions.length !== 1) return;
+		const only = suggestions[0]?.number;
+		if (only) setFromNumber((current) => current || only);
+	}, [suggestions, touched]);
 
 	const invalidate = () => {
 		queryClient.invalidateQueries({ queryKey: orpc.telephony.get.key() });
@@ -111,10 +125,16 @@ export function TelephonyForm() {
 
 	const save = useMutation(
 		orpc.telephony.update.mutationOptions({
-			onSuccess: () => {
-				toast.success("Telephony saved", {
-					description: "Run the connection test to confirm it works.",
-				});
+			onSuccess: (result) => {
+				if (result.warning) {
+					toast.warning("Saved with a warning", {
+						description: result.warning,
+					});
+				} else {
+					toast.success("Telephony saved", {
+						description: "Run the connection test to confirm it works.",
+					});
+				}
 				setTouched(false);
 				invalidate();
 			},
@@ -339,7 +359,7 @@ export function TelephonyForm() {
 									</div>
 								</div>
 
-								<div className="grid gap-2 sm:w-[320px]">
+								<div className="grid gap-2 sm:w-[360px]">
 									<div className="flex items-center justify-between gap-2">
 										<Label htmlFor="fromNumber">Calling from</Label>
 										{config ? (
@@ -356,51 +376,63 @@ export function TelephonyForm() {
 										) : null}
 									</div>
 
-									{numbers.length > 0 ? (
-										<Select
-											value={fromNumber}
-											onValueChange={(v) => {
-												setFromNumber(v ?? "");
-												setTouched(true);
-											}}
-										>
-											<SelectTrigger id="fromNumber">
-												<SelectValue placeholder="Pick a number" />
-											</SelectTrigger>
-											<SelectContent>
-												{numbers.map((number) => (
-													<SelectItem key={number} value={number}>
-														{number}
-													</SelectItem>
-												))}
-											</SelectContent>
-										</Select>
-									) : (
-										<Input
-											id="fromNumber"
-											value={fromNumber}
-											placeholder="+91 98765 43210"
-											onChange={(e) => {
-												setFromNumber(e.target.value);
-												setTouched(true);
-											}}
-										/>
-									)}
+									{/*
+									 * Always editable. Twilio also accepts numbers this
+									 * lookup cannot see — a subaccount's, or a caller ID
+									 * verified moments ago — so the suggestions below are an
+									 * offer, never a gate.
+									 */}
+									<Input
+										id="fromNumber"
+										value={fromNumber}
+										placeholder="+91 98765 43210"
+										onChange={(e) => {
+											setFromNumber(e.target.value);
+											setTouched(true);
+										}}
+									/>
 
-									{numbers.length > 0 ? (
-										<p className="text-muted-foreground text-xs">
-											{numbers.length === 1
-												? "The only number this account owns."
-												: `${numbers.length} numbers on this account.`}{" "}
-											For Indian promotional calls it also has to be the
-											registered 140-series number.
-										</p>
+									{suggestions.length > 0 ? (
+										<div className="flex flex-col gap-1.5">
+											<span className="text-muted-foreground text-xs">
+												Twilio reports these on this account:
+											</span>
+											<div className="flex flex-wrap gap-1.5">
+												{suggestions.map((item) => (
+													<Button
+														key={item.number}
+														type="button"
+														size="xs"
+														variant={
+															fromNumber === item.number
+																? "secondary"
+																: "outline"
+														}
+														onClick={() => {
+															setFromNumber(item.number);
+															setTouched(true);
+														}}
+													>
+														<span className="font-mono">{item.number}</span>
+														<span className="text-muted-foreground">
+															{item.kind}
+														</span>
+													</Button>
+												))}
+											</div>
+										</div>
 									) : (
 										<p className="text-muted-foreground text-xs">
 											{owned.data?.problem ??
-												"Save the credentials to load the numbers this account owns."}
+												"Save the credentials to load the numbers this account can call from."}
 										</p>
 									)}
+
+									<p className="text-muted-foreground text-xs">
+										A Twilio number you own, or an outside number verified as an
+										outgoing caller ID. For Indian promotional calls it also has
+										to be the registered 140-series number.
+									</p>
 								</div>
 							</>
 						) : null}
