@@ -3,9 +3,65 @@
 import { Select as SelectPrimitive } from "@base-ui/react/select";
 import { cn } from "@doki/ui/lib/utils";
 import { CaretDownIcon, CaretUpIcon, CheckIcon } from "@phosphor-icons/react";
-import type * as React from "react";
+import * as React from "react";
 
-const Select = SelectPrimitive.Root;
+type DerivedItem = { label: React.ReactNode; value: unknown };
+
+/**
+ * Collects the `<SelectItem>` descendants of a select.
+ *
+ * Walks the whole subtree rather than just direct children because the items
+ * are nested inside `SelectContent`, and often inside a `SelectGroup` under
+ * that.
+ */
+function collectItems(node: React.ReactNode, out: DerivedItem[]): void {
+	React.Children.forEach(node, (child) => {
+		if (!React.isValidElement(child)) return;
+
+		if (child.type === SelectItem) {
+			const props = child.props as SelectPrimitive.Item.Props;
+			out.push({ value: props.value, label: props.children });
+			return;
+		}
+
+		const props = child.props as { children?: React.ReactNode };
+		if (props.children) collectItems(props.children, out);
+	});
+}
+
+/**
+ * Select root that can label its own trigger.
+ *
+ * Base UI resolves the trigger's text from `items`. Without that prop it only
+ * learns a label when the user opens the popup and clicks something — so a
+ * value set programmatically renders raw, and an agent chosen by id shows as a
+ * UUID until it is re-picked by hand.
+ *
+ * Deriving `items` from the `SelectItem` children that are already declared
+ * keeps every call site correct without repeating the option list beside it.
+ * An explicitly passed `items` always wins.
+ */
+function Select<Value, Multiple extends boolean | undefined = false>({
+	items,
+	children,
+	...props
+}: SelectPrimitive.Root.Props<Value, Multiple>) {
+	const derived = React.useMemo(() => {
+		if (items) return items;
+		const found: DerivedItem[] = [];
+		collectItems(children, found);
+		return found.length > 0 ? found : undefined;
+	}, [items, children]);
+
+	return (
+		<SelectPrimitive.Root
+			items={derived as SelectPrimitive.Root.Props<Value, Multiple>["items"]}
+			{...props}
+		>
+			{children}
+		</SelectPrimitive.Root>
+	);
+}
 
 function SelectGroup({ className, ...props }: SelectPrimitive.Group.Props) {
 	return (

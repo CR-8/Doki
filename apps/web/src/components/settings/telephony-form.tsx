@@ -21,6 +21,7 @@ import {
 import { Skeleton } from "@doki/ui/components/skeleton";
 import { Switch } from "@doki/ui/components/switch";
 import {
+	ArrowsClockwiseIcon,
 	CheckCircleIcon,
 	PlugsConnectedIcon,
 	WarningIcon,
@@ -71,11 +72,20 @@ function formatWhen(value: string | Date | null): string {
 export function TelephonyForm() {
 	const [provider, setProvider] = useState<Provider>("twilio");
 	const [record, setRecord] = useState(true);
+	const [fromNumber, setFromNumber] = useState("");
 	const [touched, setTouched] = useState(false);
 	const queryClient = useQueryClient();
 
 	const telephony = useQuery(orpc.telephony.get.queryOptions());
 	const config = telephony.data?.config ?? null;
+
+	// Which numbers the connected account actually holds. Twilio refuses to
+	// dial from anything else, so this turns a guess into a choice.
+	const owned = useQuery({
+		...orpc.telephony.numbers.queryOptions(),
+		enabled: Boolean(config) && provider === "twilio",
+	});
+	const numbers = owned.data?.numbers ?? [];
 
 	// Sync once from the server, then leave the form alone so a refetch cannot
 	// stamp over something half-typed.
@@ -83,10 +93,20 @@ export function TelephonyForm() {
 		if (!config || touched) return;
 		setProvider(config.provider as Provider);
 		setRecord(config.record);
+		setFromNumber(config.fromNumber ?? "");
 	}, [config, touched]);
+
+	// With exactly one number on the account there is nothing to choose, so
+	// choosing it is the useful thing to do rather than making them retype it.
+	useEffect(() => {
+		if (touched || numbers.length !== 1) return;
+		const only = numbers[0] as string;
+		setFromNumber((current) => (current === only ? current : only));
+	}, [numbers, touched]);
 
 	const invalidate = () => {
 		queryClient.invalidateQueries({ queryKey: orpc.telephony.get.key() });
+		queryClient.invalidateQueries({ queryKey: orpc.telephony.numbers.key() });
 	};
 
 	const save = useMutation(
@@ -148,7 +168,7 @@ export function TelephonyForm() {
 			// Omitted means "keep the stored one" — the field is blank because the
 			// browser never receives the secret, not because it was cleared.
 			...(token ? { authToken: token } : {}),
-			fromNumber: (form.get("fromNumber") as string)?.trim() || null,
+			fromNumber: fromNumber.trim() || null,
 			phoneNumberId: (form.get("phoneNumberId") as string)?.trim() || null,
 			record,
 		});
@@ -319,19 +339,68 @@ export function TelephonyForm() {
 									</div>
 								</div>
 
-								<div className="grid gap-2 sm:w-[260px]">
-									<Label htmlFor="fromNumber">Calling from</Label>
-									<Input
-										id="fromNumber"
-										name="fromNumber"
-										defaultValue={config?.fromNumber ?? ""}
-										placeholder="+91 98765 43210"
-										onChange={() => setTouched(true)}
-									/>
-									<p className="text-muted-foreground text-xs">
-										Must be a number the account owns. For Indian promotional
-										calls this also has to be the registered 140-series number.
-									</p>
+								<div className="grid gap-2 sm:w-[320px]">
+									<div className="flex items-center justify-between gap-2">
+										<Label htmlFor="fromNumber">Calling from</Label>
+										{config ? (
+											<Button
+												type="button"
+												size="xs"
+												variant="ghost"
+												disabled={owned.isFetching}
+												onClick={() => owned.refetch()}
+											>
+												<ArrowsClockwiseIcon className="size-3.5" />
+												{owned.isFetching ? "Loading..." : "Refresh"}
+											</Button>
+										) : null}
+									</div>
+
+									{numbers.length > 0 ? (
+										<Select
+											value={fromNumber}
+											onValueChange={(v) => {
+												setFromNumber(v ?? "");
+												setTouched(true);
+											}}
+										>
+											<SelectTrigger id="fromNumber">
+												<SelectValue placeholder="Pick a number" />
+											</SelectTrigger>
+											<SelectContent>
+												{numbers.map((number) => (
+													<SelectItem key={number} value={number}>
+														{number}
+													</SelectItem>
+												))}
+											</SelectContent>
+										</Select>
+									) : (
+										<Input
+											id="fromNumber"
+											value={fromNumber}
+											placeholder="+91 98765 43210"
+											onChange={(e) => {
+												setFromNumber(e.target.value);
+												setTouched(true);
+											}}
+										/>
+									)}
+
+									{numbers.length > 0 ? (
+										<p className="text-muted-foreground text-xs">
+											{numbers.length === 1
+												? "The only number this account owns."
+												: `${numbers.length} numbers on this account.`}{" "}
+											For Indian promotional calls it also has to be the
+											registered 140-series number.
+										</p>
+									) : (
+										<p className="text-muted-foreground text-xs">
+											{owned.data?.problem ??
+												"Save the credentials to load the numbers this account owns."}
+										</p>
+									)}
 								</div>
 							</>
 						) : null}
