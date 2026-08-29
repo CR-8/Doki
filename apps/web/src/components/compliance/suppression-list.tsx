@@ -3,6 +3,7 @@
 import { Badge } from "@doki/ui/components/badge";
 import { Button } from "@doki/ui/components/button";
 import { Card, CardContent } from "@doki/ui/components/card";
+import { Checkbox } from "@doki/ui/components/checkbox";
 import {
 	Dialog,
 	DialogContent,
@@ -240,14 +241,26 @@ function LiftDialog({
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
 }) {
+	const [acknowledged, setAcknowledged] = useState(false);
 	const queryClient = useQueryClient();
+
+	// Reset between openings so a previous confirmation cannot carry over to
+	// the next entry.
+	useEffect(() => {
+		if (!open) setAcknowledged(false);
+	}, [open]);
 
 	const lift = useMutation(
 		orpc.compliance.liftSuppression.mutationOptions({
-			onSuccess: () => {
-				toast.success("Suppression lifted", {
-					description: "Recorded in the audit log with your reason.",
-				});
+			onSuccess: (result) => {
+				toast.success(
+					result.earlyLift ? "Opt-out lifted early" : "Suppression lifted",
+					{
+						description: result.earlyLift
+							? "Recorded as an early lift, with your reason and who authorised it."
+							: "Recorded in the audit log with your reason.",
+					},
+				);
 				onOpenChange(false);
 				queryClient.invalidateQueries({
 					queryKey: orpc.compliance.listSuppressions.key(),
@@ -262,7 +275,11 @@ function LiftDialog({
 	);
 
 	if (!entry) return null;
-	const isOptOut = entry.reason === "USER_OPT_OUT";
+
+	// Only a still-running consumer opt-out needs the extra acknowledgement.
+	// An expired freeze, or a wrong-number entry, lifts on the reason alone.
+	const frozen = isActive(entry);
+	const needsAck = entry.reason === "USER_OPT_OUT" && frozen;
 
 	function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
 		event.preventDefault();
@@ -271,6 +288,7 @@ function LiftDialog({
 		lift.mutate({
 			id: entry.id,
 			reason: String(form.get("reason") ?? "").trim(),
+			acknowledgeOptOut: acknowledged,
 		});
 	}
 
@@ -286,18 +304,39 @@ function LiftDialog({
 					</DialogHeader>
 
 					<div className="grid gap-4 py-4">
-						{isOptOut ? (
-							<div className="flex items-start gap-3 rounded-md border border-destructive/40 p-3">
-								<LockKeyIcon className="mt-0.5 size-5 text-destructive" />
-								<div className="flex flex-col gap-1">
-									<p className="font-medium text-sm">This person opted out</p>
-									<p className="text-muted-foreground text-sm">
-										The freeze runs to {formatDate(entry.suppressedUntil)} and
-										the server will refuse to lift it early. The number becomes
-										callable again by obtaining fresh consent — not by deleting
-										the record.
-									</p>
+						{needsAck ? (
+							<div className="flex flex-col gap-3 rounded-md border border-destructive/40 p-3">
+								<div className="flex items-start gap-3">
+									<LockKeyIcon className="mt-0.5 size-5 text-destructive" />
+									<div className="flex flex-col gap-1">
+										<p className="font-medium text-sm">This person opted out</p>
+										<p className="text-muted-foreground text-sm">
+											{entry.suppressedUntil
+												? `The freeze runs to ${formatDate(entry.suppressedUntil)}.`
+												: "The opt-out has no expiry."}{" "}
+											Lifting it early is recorded as an override against your
+											name. Normally the number becomes callable again by
+											obtaining fresh consent, not by removing the record.
+										</p>
+									</div>
 								</div>
+
+								<label
+									htmlFor="lift-ack"
+									className="flex cursor-pointer items-start gap-2.5 border-destructive/30 border-t pt-3"
+								>
+									<Checkbox
+										id="lift-ack"
+										checked={acknowledged}
+										onCheckedChange={(checked) =>
+											setAcknowledged(Boolean(checked))
+										}
+									/>
+									<span className="text-sm">
+										I have a lawful basis to contact this person again — fresh
+										consent, or this entry was recorded in error.
+									</span>
+								</label>
 							</div>
 						) : null}
 
@@ -330,7 +369,7 @@ function LiftDialog({
 						<Button
 							type="submit"
 							variant="destructive"
-							disabled={lift.isPending}
+							disabled={lift.isPending || (needsAck && !acknowledged)}
 						>
 							{lift.isPending ? "Lifting..." : "Lift block"}
 						</Button>

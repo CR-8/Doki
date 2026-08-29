@@ -107,12 +107,16 @@ for (const sub of others) {
 		fetch(`${subBase}/OutgoingCallerIds.json?PageSize=50`, { headers }),
 	]);
 	const subOwned = n.ok
-		? ((await n.json()) as { incoming_phone_numbers?: { phone_number: string }[] })
-				.incoming_phone_numbers?.map((x) => x.phone_number) ?? []
+		? ((
+				(await n.json()) as {
+					incoming_phone_numbers?: { phone_number: string }[];
+				}
+			).incoming_phone_numbers?.map((x) => x.phone_number) ?? [])
 		: [];
 	const subCallers = c.ok
-		? ((await c.json()) as { outgoing_caller_ids?: { phone_number: string }[] })
-				.outgoing_caller_ids?.map((x) => x.phone_number) ?? []
+		? ((
+				(await c.json()) as { outgoing_caller_ids?: { phone_number: string }[] }
+			).outgoing_caller_ids?.map((x) => x.phone_number) ?? [])
 		: [];
 	console.log(
 		`   ${sub.friendly_name} (${sub.sid}, ${sub.status}) owned=[${subOwned.join(", ")}] callerIds=[${subCallers.join(", ")}]`,

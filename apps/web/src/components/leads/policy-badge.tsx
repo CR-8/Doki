@@ -92,10 +92,32 @@ const FALLBACK: DenyPresentation = {
 	tone: "operational",
 };
 
+/** Beyond this, a weekday name stops identifying a day and starts misleading. */
+const WEEKDAY_HORIZON_MS = 6 * 24 * 3600 * 1000;
+
+/**
+ * Formats when a lead becomes callable again.
+ *
+ * The scale varies enormously: an attempt cooldown clears in hours, a
+ * post-opt-out freeze in ninety days. Rendering both as "Fri, 12:46 pm" makes
+ * the freeze read as this Friday, so anything past the coming week gets a date
+ * instead of a weekday.
+ */
 function formatRetry(retryAt: string | Date | null): string | null {
 	if (!retryAt) return null;
 	const date = typeof retryAt === "string" ? new Date(retryAt) : retryAt;
 	if (Number.isNaN(date.getTime())) return null;
+
+	const away = date.getTime() - Date.now();
+
+	if (away > WEEKDAY_HORIZON_MS) {
+		return date.toLocaleDateString(undefined, {
+			day: "numeric",
+			month: "short",
+			year: "numeric",
+		});
+	}
+
 	return date.toLocaleString(undefined, {
 		weekday: "short",
 		hour: "2-digit",

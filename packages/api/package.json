@@ -11,7 +11,7 @@
 	},
 	"scripts": {
 		"check-types": "tsc --noEmit",
-		"verify": "bun run test/telephony.check.ts",
+		"verify": "bun run test/telephony.check.ts && bun run test/lift.check.ts",
 		"verify:twilio": "bun run test/twilio-live.check.ts"
 	},
 	"dependencies": {

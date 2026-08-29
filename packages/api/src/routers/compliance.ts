@@ -281,16 +281,27 @@ export const complianceRouter = {
 	/**
 	 * Lifts a suppression.
 	 *
-	 * A consumer opt-out cannot be lifted while its freeze is still running.
-	 * That freeze is the whole point of the opt-out, and an "undo" button that
-	 * ignores it would make the record worthless — the number becomes callable
-	 * again by obtaining fresh consent, not by deleting the evidence.
+	 * Lifting a consumer opt-out before its freeze expires is possible but
+	 * deliberately awkward: it needs an explicit acknowledgement on top of the
+	 * written reason, and it is recorded as an early lift.
+	 *
+	 * An absolute block was the wrong instinct. The operator owns this data and
+	 * carries the regulatory risk, and a button that simply refuses does not
+	 * stop anyone — it pushes them to edit the database directly, which leaves
+	 * no trace at all. A gate that records who overrode it, when, and why is
+	 * worth more than one that cannot be opened.
 	 */
 	liftSuppression: tenantProcedure
 		.input(
 			z.object({
 				id: z.uuid(),
 				reason: z.string().trim().min(3).max(300),
+				/**
+				 * Required to lift a consumer opt-out early. The caller is stating
+				 * they have a lawful basis — fresh consent, or the entry was
+				 * recorded in error.
+				 */
+				acknowledgeOptOut: z.boolean().default(false),
 			}),
 		)
 		.handler(async ({ context, input }) => {
@@ -312,12 +323,15 @@ export const complianceRouter = {
 
 			const stillFrozen =
 				entry.suppressedUntil === null || entry.suppressedUntil > new Date();
+			const earlyOptOutLift = entry.reason === "USER_OPT_OUT" && stillFrozen;
 
-			if (entry.reason === "USER_OPT_OUT" && stillFrozen) {
+			// The acknowledgement is the whole safeguard: it cannot be reached by
+			// a stray click, and refusing without it keeps the override deliberate.
+			if (earlyOptOutLift && !input.acknowledgeOptOut) {
 				throw new ORPCError("BAD_REQUEST", {
 					message: entry.suppressedUntil
-						? `This person opted out. The freeze runs until ${entry.suppressedUntil.toISOString().slice(0, 10)} and cannot be lifted early.`
-						: "This person opted out permanently. It cannot be lifted.",
+						? `This person opted out and the freeze runs until ${entry.suppressedUntil.toISOString().slice(0, 10)}. Confirm you have a lawful basis to call them again before lifting it.`
+						: "This person opted out with no expiry. Confirm you have a lawful basis to call them again before lifting it.",
 				});
 			}
 
@@ -344,18 +358,32 @@ export const complianceRouter = {
 			await recordAudit(db, {
 				organizationId,
 				actor: { type: "USER", id: user.id },
-				action: "suppression.lifted",
+				// A distinct verb, so an early override is findable in the audit
+				// log without reading the metadata of every ordinary lift.
+				action: earlyOptOutLift
+					? "suppression.lifted_early"
+					: "suppression.lifted",
 				resourceType: "suppression_entry",
 				resourceId: entry.id,
 				reason: input.reason,
 				metadata: {
 					phoneE164: entry.phoneE164,
 					originalReason: entry.reason,
+					earlyLift: earlyOptOutLift,
+					freezeRanUntil: entry.suppressedUntil?.toISOString() ?? null,
+					daysRemaining: entry.suppressedUntil
+						? Math.max(
+								0,
+								Math.ceil(
+									(entry.suppressedUntil.getTime() - Date.now()) / 86_400_000,
+								),
+							)
+						: null,
 				},
 			});
 
 			await invalidateDashboard(organizationId);
-			return { ok: true as const };
+			return { ok: true as const, earlyLift: earlyOptOutLift };
 		}),
 
 	/** The workspace-wide consent trail. */
