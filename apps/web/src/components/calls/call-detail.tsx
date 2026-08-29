@@ -21,12 +21,14 @@ import { Separator } from "@doki/ui/components/separator";
 import { Skeleton } from "@doki/ui/components/skeleton";
 import { cn } from "@doki/ui/lib/utils";
 import {
+	PhoneCallIcon,
 	RobotIcon,
 	SparkleIcon,
 	UserIcon,
 	WarningIcon,
 } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import Link from "next/link";
 import { toast } from "sonner";
 
 import { orpc } from "@/utils/orpc";
@@ -130,6 +132,26 @@ export function CallDetail({ callId }: { callId: string }) {
 	);
 	const queryClient = useQueryClient();
 
+	// Attempt limits and cooldown still apply — the gate runs inside dispatch,
+	// so this cannot become a way to dial past the workspace policy.
+	const redial = useMutation(
+		orpc.calls.dispatch.mutationOptions({
+			onSuccess: (result) => {
+				if (result.ok) {
+					toast.success("Call queued", {
+						description: "Track it on the Calls page.",
+					});
+				} else {
+					toast.warning(result.reason, {
+						description: result.code ? `Policy: ${result.code}` : undefined,
+					});
+				}
+				queryClient.invalidateQueries({ queryKey: orpc.calls.list.key() });
+			},
+			onError: (error) => toast.error(error.message),
+		}),
+	);
+
 	const analyze = useMutation(
 		orpc.calls.analyze.mutationOptions({
 			onSuccess: (result) => {
@@ -181,7 +203,13 @@ export function CallDetail({ callId }: { callId: string }) {
 			<div className="flex flex-wrap items-start justify-between gap-4">
 				<div className="flex flex-col gap-1">
 					<h1 className="font-semibold text-2xl tracking-tight">
-						{lead?.name ?? call.toNumber}
+						{lead ? (
+							<Link href={`/leads/${lead.id}`} className="hover:underline">
+								{lead.name ?? call.toNumber}
+							</Link>
+						) : (
+							call.toNumber
+						)}
 					</h1>
 					<p className="font-mono text-muted-foreground text-sm">
 						{call.toNumber}
@@ -193,6 +221,23 @@ export function CallDetail({ callId }: { callId: string }) {
 					<OutcomeBadge outcome={call.outcome} />
 					<Badge variant="outline">{call.purpose.toLowerCase()}</Badge>
 					{agent ? <Badge variant="secondary">{agent.name}</Badge> : null}
+					{lead && agent ? (
+						<Button
+							size="sm"
+							variant="outline"
+							disabled={redial.isPending || !call.endedAt}
+							onClick={() =>
+								redial.mutate({
+									leadId: lead.id,
+									agentId: agent.id,
+									purpose: call.purpose as "SERVICE",
+								})
+							}
+						>
+							<PhoneCallIcon className="size-4" />
+							{redial.isPending ? "Calling..." : "Call again"}
+						</Button>
+					) : null}
 				</div>
 			</div>
 

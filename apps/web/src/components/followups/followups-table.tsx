@@ -20,16 +20,20 @@ import {
 	TableRow,
 } from "@doki/ui/components/table";
 import {
+	ArrowsClockwiseIcon,
 	CalendarCheckIcon,
 	ClockIcon,
 	LightningIcon,
 	ProhibitIcon,
 } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
 
 import { orpc } from "@/utils/orpc";
+
+import { ScheduleFollowUpDialog } from "./schedule-followup-dialog";
 
 type StatusFilter =
 	| "ALL"
@@ -90,6 +94,29 @@ export function FollowUpsTable() {
 		}),
 	);
 
+	const drain = useMutation(
+		orpc.followUps.drain.mutationOptions({
+			onSuccess: (result) => {
+				if (!result.ran) {
+					toast.info(
+						result.reason === "TOO_SOON"
+							? "A drain ran moments ago — the system enforces a floor between runs."
+							: "Another drain is already running.",
+					);
+					return;
+				}
+				toast.success(
+					`Drained ${result.claimed} due follow-up${result.claimed === 1 ? "" : "s"}`,
+					{
+						description: `${result.succeeded} succeeded, ${result.skipped} skipped by policy, ${result.failed} failed.`,
+					},
+				);
+				invalidate();
+			},
+			onError: (error) => toast.error(error.message),
+		}),
+	);
+
 	const runNow = useMutation(
 		orpc.followUps.runNow.mutationOptions({
 			onSuccess: (result) => {
@@ -134,20 +161,32 @@ export function FollowUpsTable() {
 					</Select>
 				</div>
 
-				{data ? (
-					<Card className="px-3 py-2">
-						<CardContent className="flex items-center gap-4 p-0 text-xs">
-							<div className="flex flex-col">
-								<span className="text-muted-foreground">Pending</span>
-								<span className="font-mono">{data.pending}</span>
-							</div>
-							<div className="flex flex-col">
-								<span className="text-muted-foreground">Due now</span>
-								<span className="font-mono">{data.dueNow}</span>
-							</div>
-						</CardContent>
-					</Card>
-				) : null}
+				<div className="flex flex-wrap items-center gap-3">
+					<Button
+						size="sm"
+						variant="outline"
+						disabled={drain.isPending}
+						onClick={() => drain.mutate({ force: false })}
+					>
+						<ArrowsClockwiseIcon className="size-4" />
+						{drain.isPending ? "Draining..." : "Drain now"}
+					</Button>
+					<ScheduleFollowUpDialog />
+					{data ? (
+						<Card className="px-3 py-2">
+							<CardContent className="flex items-center gap-4 p-0 text-xs">
+								<div className="flex flex-col">
+									<span className="text-muted-foreground">Pending</span>
+									<span className="font-mono">{data.pending}</span>
+								</div>
+								<div className="flex flex-col">
+									<span className="text-muted-foreground">Due now</span>
+									<span className="font-mono">{data.dueNow}</span>
+								</div>
+							</CardContent>
+						</Card>
+					) : null}
+				</div>
 			</div>
 
 			<Card>
@@ -181,14 +220,17 @@ export function FollowUpsTable() {
 									return (
 										<TableRow key={action.id}>
 											<TableCell>
-												<div className="flex flex-col">
+												<Link
+													href={`/leads/${action.leadId}`}
+													className="flex flex-col hover:underline"
+												>
 													<span className="font-medium">
 														{action.leadName ?? action.leadPhone ?? "Unknown"}
 													</span>
 													<span className="font-mono text-muted-foreground text-xs">
 														{action.leadPhone}
 													</span>
-												</div>
+												</Link>
 											</TableCell>
 											<TableCell>
 												<div className="flex flex-col gap-1">
