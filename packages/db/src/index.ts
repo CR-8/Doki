@@ -33,7 +33,17 @@ function createClient() {
 		prepare: false,
 		max: isServerless ? 1 : 10,
 		idle_timeout: isServerless ? 10 : 20,
-		connect_timeout: 10,
+		/**
+		 * Sized for a cold start, not a warm one.
+		 *
+		 * Neon suspends the compute when idle, and the first connection after
+		 * that has to wait for it to wake — which regularly exceeds ten seconds
+		 * once the TLS handshake and channel binding are included. Failing fast
+		 * there is the wrong trade: it turns "the database was asleep" into a
+		 * 500 on the first page load after any quiet period, which is precisely
+		 * when someone is being shown the product.
+		 */
+		connect_timeout: 30,
 	});
 }
 
